@@ -220,14 +220,23 @@ class SmartTelegramInput(TelegramInput):
             {"command": "code", "description": "💻 Delegate coding via OpenCode"}
         ]
         try:
-            url = f"https://api.telegram.org/bot{self.access_token}/setMyCommands"
-            resp = requests.post(url, json={"commands": commands}, timeout=10)
+            # 1. Set commands for default scope
+            url_def = f"https://api.telegram.org/bot{self.access_token}/setMyCommands"
+            requests.post(url_def, json={"commands": commands, "scope": {"type": "default"}}, timeout=10)
+
+            # 2. Set commands for private chats
+            requests.post(url_def, json={"commands": commands, "scope": {"type": "all_private_chats"}}, timeout=10)
+
+            # 3. Explicitly set native chat menu button to 'commands'
+            url_menu = f"https://api.telegram.org/bot{self.access_token}/setChatMenuButton"
+            resp = requests.post(url_menu, json={"menu_button": {"type": "commands"}}, timeout=10)
+
             if resp.status_code == 200 and resp.json().get("ok"):
-                logger.info(f"Successfully registered {len(commands)} Telegram bot commands in native Menu.")
+                logger.info(f"Successfully registered {len(commands)} Telegram bot commands in native Menu & ChatMenuButton.")
             else:
-                logger.warning(f"setMyCommands failed: {resp.status_code} {resp.text}")
+                logger.warning(f"setChatMenuButton returned: {resp.status_code} {resp.text}")
         except Exception as e:
-            logger.warning(f"Error calling setMyCommands: {e}")
+            logger.warning(f"Error registering Telegram commands menu: {e}")
 
     def get_output_channel(self) -> OutputChannel:
         return SmartTelegramOutput(self.access_token)
