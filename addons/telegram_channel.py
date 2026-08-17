@@ -282,6 +282,9 @@ class SmartTelegramInput(TelegramInput):
 
         @telegram_webhook.route("/webhook", methods=["GET", "POST"])
         async def message(request: Request) -> Any:
+            if request.method == "GET":
+                return response.json({"status": "active", "bot": self.verify, "service": "Alya Telegram Webhook"})
+
             if request.method == "POST":
                 request_dict = request.json
                 if isinstance(request_dict, Text):
