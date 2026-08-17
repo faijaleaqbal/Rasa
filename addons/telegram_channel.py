@@ -165,11 +165,69 @@ class SmartTelegramInput(TelegramInput):
 
         if self.is_valid_token:
             logger.info(f"SmartTelegramInput initialized for bot @{self.verify}")
+            try:
+                self._register_telegram_commands()
+            except Exception as e:
+                logger.warning(f"Failed to register Telegram bot commands: {e}")
         else:
             logger.warning(
                 "SmartTelegramInput: No valid Telegram bot token found. "
                 "Set TELEGRAM_BOT_TOKEN in .env to activate Telegram channel."
             )
+
+    def _register_telegram_commands(self) -> None:
+        """Registers the native Telegram commands menu (the [/] button next to chat input)."""
+        commands = [
+            {"command": "help", "description": "📖 List all commands & skills"},
+            {"command": "weather", "description": "🌤️ Real-time weather lookup"},
+            {"command": "news", "description": "🗞️ Latest news digest & headlines"},
+            {"command": "currency", "description": "💱 Currency exchange conversion"},
+            {"command": "crypto", "description": "🪙 Live crypto prices & ETH gas"},
+            {"command": "wiki", "description": "📚 Wikipedia encyclopedia search"},
+            {"command": "movie", "description": "🎬 Movie/TV IMDb ratings & plot"},
+            {"command": "holiday", "description": "🎉 Public holidays & festivals"},
+            {"command": "image", "description": "🖼️ Search HD stock images"},
+            {"command": "translate", "description": "🌐 Dictionary & translation"},
+            {"command": "joke", "description": "😂 Random joke & quote"},
+            {"command": "vehicle", "description": "🚗 Vehicle VIN decoder & specs"},
+            {"command": "shop", "description": "🛒 Product & price comparison"},
+            {"command": "breach", "description": "🚨 Check email/password breaches"},
+            {"command": "math", "description": "🔢 WolframAlpha & SymPy solver"},
+            {"command": "science", "description": "🚀 NASA Astronomy Picture of Day"},
+            {"command": "remind", "description": "⏰ Set time-based reminder"},
+            {"command": "medremind", "description": "💊 Medicine dosage reminder"},
+            {"command": "note", "description": "📝 Save a note"},
+            {"command": "notes", "description": "📋 List saved notes"},
+            {"command": "todo", "description": "✅ Add task to to-do list"},
+            {"command": "todos", "description": "📌 List pending to-dos"},
+            {"command": "expense", "description": "💰 Log expense with category"},
+            {"command": "expenses", "description": "📊 Monthly finance summary"},
+            {"command": "bill", "description": "🧾 Add bill payment reminder"},
+            {"command": "traffic", "description": "🚗 OpenRouteService ETA & route"},
+            {"command": "ride", "description": "🚖 Cab & auto fare estimate"},
+            {"command": "track", "description": "📦 Universal parcel tracking"},
+            {"command": "habit", "description": "🔥 Daily habit streak tracker"},
+            {"command": "serverstatus", "description": "🖥️ EC2 CPU/RAM/Disk health"},
+            {"command": "speedtest", "description": "⚡ Internet speed test"},
+            {"command": "pdf", "description": "📄 Generate styled PDF document"},
+            {"command": "excel", "description": "📊 Generate Excel spreadsheet"},
+            {"command": "doc", "description": "📝 Generate Word (.docx) doc"},
+            {"command": "gmail", "description": "📬 Read recent Gmail messages"},
+            {"command": "outlook", "description": "📧 Read recent Outlook emails"},
+            {"command": "drive", "description": "📂 Search Google Drive files"},
+            {"command": "calendar", "description": "📅 View Google Calendar events"},
+            {"command": "github", "description": "🐙 GitHub repos, issues, PRs"},
+            {"command": "code", "description": "💻 Delegate coding via OpenCode"}
+        ]
+        try:
+            url = f"https://api.telegram.org/bot{self.access_token}/setMyCommands"
+            resp = requests.post(url, json={"commands": commands}, timeout=10)
+            if resp.status_code == 200 and resp.json().get("ok"):
+                logger.info(f"Successfully registered {len(commands)} Telegram bot commands in native Menu.")
+            else:
+                logger.warning(f"setMyCommands failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            logger.warning(f"Error calling setMyCommands: {e}")
 
     def get_output_channel(self) -> OutputChannel:
         return SmartTelegramOutput(self.access_token)
