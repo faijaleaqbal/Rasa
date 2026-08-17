@@ -156,6 +156,13 @@ nlu:
     - insaan ho ya computer?
     - kya tu ek machine hai?
     - tu koun hai bhai?
+    - what is your name?
+    - tumhara naam kya hai?
+    - who are you?
+    - who is Alya?
+    - kya tum Alya ho?
+    - tell me about yourself
+    - introduce yourself
 
 - intent: ask_weather
   examples: |

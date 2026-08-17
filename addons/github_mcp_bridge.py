@@ -50,7 +50,7 @@ class GitHubMCPProcess:
             "params": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "RasaBotBridge", "version": "1.0"}
+                "clientInfo": {"name": "AlyaMCPBridge", "version": "1.0"}
             }
         }
         self.proc.stdin.write(json.dumps(init_req) + "\n")

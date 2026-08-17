@@ -3,7 +3,7 @@
 recipe: default.v1
 
 # The assistant project unique identifier
-assistant_id: pixel_exch_bot_assistant
+assistant_id: alya_bot_assistant
 
 # Configuration for Rasa NLU.
 # https://rasa.com/docs/rasa/nlu/components/

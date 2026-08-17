@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Quick script to configure credentials and restart services
+# Quick script to configure credentials and restart services for Alya Bot
 
-ENV_FILE="/home/ubuntu/agency-agents/.env"
+ENV_FILE="/home/ubuntu/Rasa/.env"
 
-echo "=== Pixel Bot Credential Setup ==="
+echo "=== Alya Bot Credential Setup ==="
 
 read -p "Enter Groq API Key (leave empty to keep current): " GROQ_KEY
 read -p "Enter Telegram Bot Token (e.g. 123456:ABC-DEF...) (leave empty to keep current): " TG_TOKEN
-read -p "Enter Telegram Webhook URL (e.g. https://xxxx.ngrok-free.app/webhooks/telegram/webhook): " TG_WEBHOOK
+read -p "Enter Telegram Webhook URL (e.g. https://rasaagent.duckdns.org/webhooks/telegram/webhook): " TG_WEBHOOK
 read -p "Enter Tavily API Key (optional for web search): " TAVILY_KEY
 
 if [ -n "$GROQ_KEY" ]; then
@@ -26,7 +26,7 @@ if [ -n "$TAVILY_KEY" ]; then
     sed -i "s|^TAVILY_API_KEY=.*|TAVILY_API_KEY=$TAVILY_KEY|" "$ENV_FILE"
 fi
 
-echo "[*] Restarting Rasa Bot and Action services..."
+echo "[*] Restarting Alya Bot and Action services..."
 sudo systemctl restart rasa-actions.service
 sudo systemctl restart rasa-bot.service
 

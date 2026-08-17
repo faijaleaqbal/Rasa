@@ -38,7 +38,7 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
     # 1. /help or /start
     if cmd in ["/start", "/help", "/commands"]:
         help_text = (
-            "✨ **Alya Rasa Bot (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
+            "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
             "**🌤️ Real-Time Free APIs:**\n"
             "• `/weather <city>` — Live weather (e.g. `/weather Mumbai`)\n"
             "• `/news [topic]` — Top headlines (e.g. `/news tech`)\n"

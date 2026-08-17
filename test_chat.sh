@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Interactive CLI Tester for Rasa Hinglish Bot
+# Interactive CLI Tester for Alya Hinglish AI Assistant
 
 SERVER_URL="http://localhost:5005/webhooks/rest/webhook"
 SENDER_ID="cli_tester_$(date +%s)"
 
 echo "=========================================================="
-echo "    Pixel Chatbot CLI Tester (@pixel_exch_bot)           "
+echo "      Alya AI Chatbot CLI Tester (@Alya_Rasa_Bot)         "
 echo "    Type your message and press ENTER. Type 'exit' to quit"
 echo "=========================================================="
 
@@ -25,7 +25,7 @@ while true; do
         -H "Content-Type: application/json" \
         -d "{\"sender\": \"$SENDER_ID\", \"message\": \"$USER_INPUT\"}")
 
-    echo -e "\033[1;32mPixel:\033[0m"
+    echo -e "\033[1;32mAlya:\033[0m"
     echo "$RESPONSE" | python3 -c '
 import sys, json
 try:
