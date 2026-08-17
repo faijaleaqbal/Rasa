@@ -983,80 +983,63 @@ class ActionLLMResponse(Action):
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(past_dialogue)
         messages.append({"role": "user", "content": user_message})
-
         try:
-            from groq import Groq
-            client = Groq(api_key=groq_api_key, max_retries=0)
+            from .llm_provider import LLMProviderManager
 
-            candidate_models = [
-                os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b"),
-                "qwen/qwen3.6-27b",
-                "openai/gpt-oss-20b",
-                "openai/gpt-oss-120b"
-            ]
-            unique_candidates = list(dict.fromkeys(candidate_models))
-
+            curr_messages = list(messages)
+            tool_iterations = 0
+            max_iterations = 3
             final_text = None
 
-            for m in unique_candidates:
-                try:
-                    curr_messages = list(messages)
-                    tool_iterations = 0
-                    max_iterations = 3
+            while tool_iterations < max_iterations:
+                content, tool_calls, provider_used = LLMProviderManager.call_chat_completion(
+                    messages=curr_messages,
+                    tools=LLM_TOOLS_SPEC,
+                    temperature=0.7,
+                    max_tokens=900
+                )
 
-                    while tool_iterations < max_iterations:
-                        resp = client.chat.completions.create(
-                            model=m,
-                            messages=curr_messages,
-                            tools=LLM_TOOLS_SPEC,
-                            temperature=0.7,
-                            max_tokens=900
-                        )
-                        msg = resp.choices[0].message
-                        if not msg.tool_calls:
-                            final_text = msg.content
-                            break
+                if not tool_calls:
+                    final_text = content
+                    break
 
-                        curr_messages.append(msg)
-                        for tool_call in msg.tool_calls:
-                            fn_name = tool_call.function.name
-                            try:
-                                fn_args = json.loads(tool_call.function.arguments)
-                            except Exception:
-                                fn_args = {}
+                curr_messages.append({"role": "assistant", "content": content or "", "tool_calls": tool_calls})
+                for tool_call in tool_calls:
+                    fn_data = tool_call.get("function", {})
+                    fn_name = fn_data.get("name")
+                    try:
+                        fn_args = json.loads(fn_data.get("arguments", "{}"))
+                    except Exception:
+                        fn_args = {}
 
-                            tool_output = execute_tool_call(fn_name, fn_args, user_id, chat_id)
-                            curr_messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call.id,
-                                "name": fn_name,
-                                "content": str(tool_output)
-                            })
+                    tool_output = execute_tool_call(fn_name, fn_args, user_id, chat_id)
+                    curr_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.get("id"),
+                        "name": fn_name,
+                        "content": str(tool_output)
+                    })
 
-                        tool_iterations += 1
-                    else:
-                        curr_messages.append({
-                            "role": "user",
-                            "content": "Please synthesize the above tool findings and reply in natural Hinglish."
-                        })
-                        synth_resp = client.chat.completions.create(
-                            model=m,
-                            messages=curr_messages,
-                            temperature=0.7,
-                            max_tokens=900
-                        )
-                        final_text = synth_resp.choices[0].message.content
-
-                    if final_text:
-                        break
-                except Exception as e:
-                    logger.warning(f"Groq completion failed with model {m}: {e}")
-                    continue
+                tool_iterations += 1
+            else:
+                curr_messages.append({
+                    "role": "user",
+                    "content": "Please synthesize the above tool findings and reply in natural Hinglish."
+                })
+                synth_content, _, _ = LLMProviderManager.call_chat_completion(
+                    messages=curr_messages,
+                    temperature=0.7,
+                    max_tokens=900
+                )
+                final_text = synth_content
 
             if final_text:
                 dispatcher.utter_message(text=final_text)
             else:
-                dispatcher.utter_message(text="Arre bhai, thoda sa blank ho gaya dimag! Kuch aur puchho na?")
+                dispatcher.utter_message(text="Arre bhai, thoda sa network glitch aa gaya AI services mein! Ek baar dubara message karo?")
+        except Exception as e:
+            logger.error(f"ActionLLMResponse unexpected error: {e}", exc_info=True)
+            dispatcher.utter_message(text="Sorry, AI service is temporarily unavailable, please try again in a moment.")
 
         except Exception as e:
             logger.error(f"Error in ActionLLMResponse: {e}", exc_info=True)
