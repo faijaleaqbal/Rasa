@@ -9,6 +9,7 @@ from . import skills_productivity as prod
 from . import skills_documents as docs
 from . import skills_free_apis as apis
 from . import skills_utilities as utils
+from . import skills_extended as ext
 from . import mcp_client as mcp
 
 logger = logging.getLogger(__name__)
@@ -40,49 +41,75 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         help_text = (
             "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
             "**🌤️ Real-Time Free APIs:**\n"
-            "• `/weather <city>` — Live weather (e.g. `/weather Mumbai`)\n"
-            "• `/news [topic]` — Top headlines (e.g. `/news tech`)\n"
-            "• `/currency <amt> <from> <to>` — Currency conversion (e.g. `/currency 250 USD INR`)\n"
-            "• `/crypto [coin]` — Live crypto prices (e.g. `/crypto btc,sol,ltc`)\n"
-            "• `/wallet <address>` — Wallet balance & portfolio valuation in USD & INR (ETH/BTC/SOL)\n"
+            "• `/weather <city>` — Live weather (Default: Malda, WB)\n"
+            "• `/news [topic]` — Top headlines (English)\n"
+            "• `/currency <amt> <from> <to>` — Currency exchange conversion\n"
+            "• `/crypto [coin]` — Live crypto prices & tickers\n"
+            "• `/wallet <address>` — Multi-chain wallet balance & valuation (ETH/BTC/SOL)\n"
             "• `/gas` — Ethereum gas fee tracker (Etherscan)\n"
-            "• `/wiki <topic>` — Wikipedia & books search (e.g. `/wiki Quantum Computing`)\n"
-            "• `/movie <title>` — Movie / TV ratings & plot (e.g. `/movie Inception`)\n"
-            "• `/holiday [country]` — Public holidays & festivals (e.g. `/holiday IN`)\n"
-            "• `/image <query>` — Search HD photos (e.g. `/image sunset`)\n"
-            "• `/translate <text>` — Dictionary & translation (e.g. `/translate Namaste`)\n"
+            "• `/wiki <topic>` — Wikipedia & books search\n"
+            "• `/movie <title>` — Movie / TV ratings & plot (OMDb/TMDB)\n"
+            "• `/holiday [country]` — Public holidays & festivals\n"
+            "• `/image <query>` — Search HD photos (Unsplash/Pexels)\n"
+            "• `/translate <text>` — Dictionary & translation\n"
             "• `/joke` — Random clean joke & inspirational quote\n"
-            "• `/vehicle <vin>` — Vehicle VIN decoder & specs\n"
-            "• `/shop <product>` — Product info & price comparison (e.g. `/shop Sony WH-1000XM5`)\n"
-            "• `/breach <email_or_pwd>` — Data breach check via XposedOrNot & HIBP\n"
-            "• `/math <expression>` — WolframAlpha & SymPy solver (e.g. `/math integrate x^2 sin(x)`)\n"
+            "• `/math <expression>` — WolframAlpha & SymPy solver\n"
             "• `/science` — NASA Astronomy Picture of the Day\n\n"
-            "**📋 Daily Life Utilities:**\n"
-            "• `/remind <time> <msg>` — Set reminder (e.g. `/remind in 15 mins Team sync`)\n"
-            "• `/medremind <time> <med>` — Medicine dosage reminder\n"
-            "• `/note <text>` — Save a quick note\n"
-            "• `/notes` — List saved notes\n"
-            "• `/todo <task>` — Add task to to-do list\n"
-            "• `/todos` — List pending tasks\n"
-            "• `/expense <amt> <cat> <desc>` — Log expense (e.g. `/expense 450 food Lunch`)\n"
+            "**💻 Developer & DevOps Supertools:**\n"
+            "• `/dns <domain>` — DNS records (A, MX, NS, TXT) lookup\n"
+            "• `/http <url>` — HTTP status, response latency & headers\n"
+            "• `/cron <expr>` — Translate cron syntax to plain English\n"
+            "• `/json <text>` — Format, minify & validate JSON\n"
+            "• `/ip [ip_address]` — Geo-IP location, ISP & ASN lookup\n"
+            "• `/code <task>` — Delegate coding task via OpenCode server\n"
+            "• `/github [repo]` — List GitHub repos, issues, and PRs\n\n"
+            "**🔐 Privacy & Security:**\n"
+            "• `/passgen [length]` — Cryptographically strong password generator\n"
+            "• `/hash <text>` — MD5, SHA-1, SHA-256, Base64 converter\n"
+            "• `/unshorten <url>` — Safe URL redirect expander\n"
+            "• `/breach <email_or_pwd>` — Data breach check via XposedOrNot & HIBP\n"
+            "• `/tempmail` — Generate disposable temporary email inbox\n"
+            "• `/checkmail <login> <domain>` — Check OTP & incoming temporary emails\n\n"
+            "**💰 Financial & Calculators:**\n"
+            "• `/sip <monthly> <rate> <years>` — Mutual Fund SIP wealth compounding calculator\n"
+            "• `/emi <loan> <rate> <years>` — Loan EMI, interest & amortization calculator\n"
+            "• `/split <amount> <people>` — Restaurant bill & tip splitter\n"
+            "• `/expense <amt> <cat> <desc>` — Log expense with analytics\n"
             "• `/expenses` — Monthly finance summary & breakdown\n"
-            "• `/bill <name> <due> [amt]` — Bill reminder (e.g. `/bill WiFi 2026-08-25 1000`)\n"
-            "• `/traffic <origin> to <destination>` — OpenRouteService ETA & distance\n"
-            "• `/ride <from> to <to>` — Uber / Ola fare estimate & distance\n"
-            "• `/track <order_id>` — Universal parcel tracking\n"
-            "• `/habit [name]` — Daily habit streak tracker\n"
-            "• `/serverstatus` — EC2 CPU, RAM, Disk & process diagnostics\n"
-            "• `/speedtest` — Server internet bandwidth test\n\n"
-            "**📁 Productivity & Files:**\n"
-            "• `/pdf <title>` — Generate styled PDF document & send to chat\n"
-            "• `/excel <title>` — Generate styled Excel sheet & send to chat\n"
-            "• `/doc <title>` — Generate styled Word doc (.docx) & send to chat\n"
-            "• `/gmail [query]` — Read recent Gmail messages\n"
-            "• `/outlook` — Read recent Outlook emails\n"
-            "• `/drive [query]` — Search Google Drive files\n"
-            "• `/calendar` — View upcoming Google Calendar events\n"
-            "• `/github [repo]` — List GitHub repos, issues, and PRs\n"
-            "• `/code <task>` — Delegate coding task via OpenCode server\n\n"
+            "• `/bill <name> <due> [amt]` — Add bill reminder alert\n\n"
+            "**🏥 Health, Fitness & Writing:**\n"
+            "• `/bmi <weight> <height>` — Body Mass Index & health category\n"
+            "• `/calorie <food>` — Nutrition, protein, carbs & calorie profile\n"
+            "• `/water [ml]` — Water hydration logging\n"
+            "• `/grammar <text>` — Grammar, tone polish & rewriter\n"
+            "• `/email <topic>` — Formal business & leave email drafter\n"
+            "• `/synonym <word>` — Thesaurus, synonyms & antonyms\n\n"
+            "**⏱️ Daily Productivity & Indian Services:**\n"
+            "• `/qr <text_or_url>` — Generate HD QR code image\n"
+            "• `/barcode <number>` — Generate Code128 barcode image\n"
+            "• `/pincode <pin>` — India Post office & district lookup\n"
+            "• `/ifsc <code>` — Bank branch & IFSC finder (Razorpay API)\n"
+            "• `/shorten <url>` — Create short TinyURL link\n"
+            "• `/remind <time> <msg>` — Time-based reminder scheduler\n"
+            "• `/time <city>` — World clock & timezone converter\n"
+            "• `/countdown <date>` — Event countdown tracker\n"
+            "• `/traffic <from> to <to>` — Commute ETA & route\n"
+            "• `/serverstatus` — EC2 CPU, RAM, Disk health\n"
+            "• `/speedtest` — Internet speed test\n\n"
+            "**🎮 Entertainment & Media:**\n"
+            "• `/meme <top> | <bottom>` — Custom meme image generator\n"
+            "• `/anime <title>` — MyAnimeList anime & manga ratings\n"
+            "• `/recipe <dish>` — Cooking ingredients & instructions\n"
+            "• `/riddle` — Fun brain teaser riddles\n"
+            "• `/pick <opt1, opt2>` — Random decision maker & `/dice`, `/coinflip`\n\n"
+            "**📁 Document Engines & OAuth:**\n"
+            "• `/pdf <title>` — Styled PDF document engine\n"
+            "• `/excel <title>` — Styled Excel spreadsheet engine\n"
+            "• `/doc <title>` — Styled Word (.docx) memo engine\n"
+            "• `/gmail [query]` — Live Gmail reader\n"
+            "• `/outlook` — Live Outlook email reader\n"
+            "• `/drive [query]` — Google Drive search\n"
+            "• `/calendar` — Google Calendar schedule\n\n"
             "💡 _Tip: You can tap the **[/] Menu** button next to your text bar to auto-complete any command!_"
         )
         return {"handled": True, "text": help_text}
@@ -370,5 +397,172 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         ]
         fpath, msg = docs.create_word_file(title, sections)
         return {"handled": True, "text": msg, "file_path": fpath, "file_type": "document"}
+
+    # 40. /dns <domain>
+    elif cmd == "/dns":
+        return {"handled": True, "text": ext.lookup_dns(args_str)}
+
+    # 41. /http <url>
+    elif cmd in ["/http", "/curl"]:
+        return {"handled": True, "text": ext.test_http_endpoint(args_str)}
+
+    # 42. /cron <expression>
+    elif cmd == "/cron":
+        return {"handled": True, "text": ext.explain_cron(args_str)}
+
+    # 43. /json <raw_json>
+    elif cmd == "/json":
+        return {"handled": True, "text": ext.format_json(args_str)}
+
+    # 44. /ip [ip_address]
+    elif cmd == "/ip":
+        return {"handled": True, "text": ext.lookup_ip(args_str)}
+
+    # 45. /passgen [length]
+    elif cmd in ["/passgen", "/password"]:
+        l = int(args_str) if args_str.isdigit() else 16
+        return {"handled": True, "text": ext.generate_password(l)}
+
+    # 46. /hash <text>
+    elif cmd == "/hash":
+        return {"handled": True, "text": ext.calculate_hashes(args_str)}
+
+    # 47. /unshorten <url>
+    elif cmd == "/unshorten":
+        return {"handled": True, "text": ext.unshorten_url(args_str)}
+
+    # 48. /tempmail & /checkmail
+    elif cmd in ["/tempmail", "/disposable"]:
+        return {"handled": True, "text": ext.generate_tempmail()}
+    elif cmd == "/checkmail":
+        tokens = args_str.split()
+        if len(tokens) >= 2:
+            return {"handled": True, "text": ext.check_tempmail(tokens[0], tokens[1])}
+        elif "@" in args_str:
+            l, d = args_str.split("@", 1)
+            return {"handled": True, "text": ext.check_tempmail(l, d)}
+        return {"handled": True, "text": "Usage: `/checkmail <login> <domain>` or `/checkmail email@1secmail.com`"}
+
+    # 49. /sip <monthly> <rate> <years>
+    elif cmd == "/sip":
+        tokens = args_str.split()
+        if len(tokens) >= 3:
+            try:
+                return {"handled": True, "text": ext.calculate_sip(float(tokens[0]), float(tokens[1]), int(tokens[2]))}
+            except ValueError:
+                pass
+        return {"handled": True, "text": "Usage: `/sip <monthly_amount> <expected_return_pct> <years>`\nExample: `/sip 5000 15 10`"}
+
+    # 50. /emi <loan> <rate> <years>
+    elif cmd == "/emi":
+        tokens = args_str.split()
+        if len(tokens) >= 3:
+            try:
+                return {"handled": True, "text": ext.calculate_emi(float(tokens[0]), float(tokens[1]), int(tokens[2]))}
+            except ValueError:
+                pass
+        return {"handled": True, "text": "Usage: `/emi <loan_amount> <interest_rate_pct> <years>`\nExample: `/emi 500000 9.5 5`"}
+
+    # 51. /split <amount> <people> [tip]
+    elif cmd == "/split":
+        tokens = args_str.split()
+        if len(tokens) >= 2:
+            try:
+                amt = float(tokens[0])
+                peop = int(tokens[1])
+                tip = float(tokens[2]) if len(tokens) >= 3 else 0.0
+                return {"handled": True, "text": ext.split_bill(amt, peop, tip)}
+            except ValueError:
+                pass
+        return {"handled": True, "text": "Usage: `/split <total_amount> <number_of_people> [optional_tip_pct]`\nExample: `/split 1500 4 10`"}
+
+    # 52. /bmi <weight_kg> <height_cm>
+    elif cmd == "/bmi":
+        tokens = args_str.split()
+        if len(tokens) >= 2:
+            try:
+                return {"handled": True, "text": ext.calculate_bmi(float(tokens[0]), float(tokens[1]))}
+            except ValueError:
+                pass
+        return {"handled": True, "text": "Usage: `/bmi <weight_in_kg> <height_in_cm>`\nExample: `/bmi 70 175`"}
+
+    # 53. /calorie <food>
+    elif cmd in ["/calorie", "/nutrition"]:
+        return {"handled": True, "text": ext.lookup_calorie_nutrition(args_str)}
+
+    # 54. /water [ml]
+    elif cmd == "/water":
+        ml = args_str if args_str else "250"
+        return {"handled": True, "text": utils.record_habit_completion(user_id, f"Drank {ml}ml Water 💧")}
+
+    # 55. /grammar <text>
+    elif cmd in ["/grammar", "/fix"]:
+        return {"handled": True, "text": ext.improve_grammar(args_str)}
+
+    # 56. /email <topic>
+    elif cmd == "/email":
+        return {"handled": True, "text": ext.draft_email(args_str)}
+
+    # 57. /synonym <word>
+    elif cmd in ["/synonym", "/thesaurus"]:
+        return {"handled": True, "text": ext.lookup_synonyms_thesaurus(args_str)}
+
+    # 58. /time <city>
+    elif cmd in ["/time", "/timezone"]:
+        return {"handled": True, "text": ext.get_world_time(args_str)}
+
+    # 59. /countdown <date>
+    elif cmd == "/countdown":
+        return {"handled": True, "text": ext.calculate_countdown(args_str)}
+
+    # 60. /qr <text_or_url>
+    elif cmd in ["/qr", "/qrcode"]:
+        fpath = ext.generate_qr_code_file(args_str)
+        return {"handled": True, "text": f"🏁 **QR Code Generated for:** `{args_str or 'Alya Bot'}`", "file_path": fpath, "file_type": "photo"}
+
+    # 61. /barcode <code>
+    elif cmd == "/barcode":
+        fpath = ext.generate_barcode_file(args_str)
+        return {"handled": True, "text": f"🏷️ **Barcode Generated for:** `{args_str or 'ALYA123'}`", "file_path": fpath, "file_type": "photo"}
+
+    # 62. /meme <top> | <bottom>
+    elif cmd == "/meme":
+        parts_m = args_str.split("|")
+        top_m = parts_m[0].strip() if len(parts_m) > 0 else "When Alya executes skills"
+        bot_m = parts_m[1].strip() if len(parts_m) > 1 else "Zero Errors"
+        meme_url = ext.generate_meme_url(top_m, bot_m)
+        return {"handled": True, "text": f"🎭 **Generated Meme:**\n\n[View / Download Meme Image]({meme_url})"}
+
+    # 63. /anime <title>
+    elif cmd == "/anime":
+        return {"handled": True, "text": ext.search_anime(args_str)}
+
+    # 64. /riddle
+    elif cmd == "/riddle":
+        return {"handled": True, "text": ext.get_riddle()}
+
+    # 65. /pick <options> | /dice | /coinflip
+    elif cmd == "/pick":
+        return {"handled": True, "text": ext.pick_random(args_str)}
+    elif cmd in ["/dice", "/roll"]:
+        return {"handled": True, "text": ext.pick_random("dice")}
+    elif cmd in ["/coinflip", "/flip"]:
+        return {"handled": True, "text": ext.pick_random("coin")}
+
+    # 66. /recipe <dish>
+    elif cmd in ["/recipe", "/cook"]:
+        return {"handled": True, "text": ext.lookup_recipe(args_str)}
+
+    # 67. /pincode <pin>
+    elif cmd in ["/pincode", "/pin", "/postal"]:
+        return {"handled": True, "text": ext.lookup_pincode(args_str)}
+
+    # 68. /ifsc <code>
+    elif cmd in ["/ifsc", "/bank"]:
+        return {"handled": True, "text": ext.lookup_ifsc(args_str)}
+
+    # 69. /shorten <url>
+    elif cmd == "/shorten":
+        return {"handled": True, "text": ext.shorten_url(args_str)}
 
     return {"handled": False}
