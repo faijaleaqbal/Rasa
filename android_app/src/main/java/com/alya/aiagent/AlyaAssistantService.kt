@@ -148,8 +148,17 @@ class AlyaAssistantService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun sanitizeServerUrl(rawUrl: String): String {
+        var clean = rawUrl.trim()
+        if (clean.isEmpty()) return "http://3.90.20.247:5005"
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) clean = "http://$clean"
+        if (clean.endsWith("/")) clean = clean.dropLast(1)
+        return clean
+    }
+
     private fun processCommandWithAlya(userMessage: String) {
-        val serverBase = getSharedPreferences("AlyaPrefs", Context.MODE_PRIVATE).getString("server_url", "http://127.0.0.1:5005")
+        val rawServer = getSharedPreferences("AlyaPrefs", Context.MODE_PRIVATE).getString("server_url", "http://3.90.20.247:5005") ?: "http://3.90.20.247:5005"
+        val serverBase = sanitizeServerUrl(rawServer)
         val endpoint = "$serverBase/webhooks/rest/webhook"
 
         executor.execute {

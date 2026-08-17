@@ -15,6 +15,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -30,11 +31,18 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
+    companion object {
+        const val DEFAULT_SERVER_URL = "http://3.90.20.247:5005"
+        const val PREFS_NAME = "AlyaPrefs"
+        const val KEY_SERVER_URL = "server_url"
+    }
+
     private lateinit var tvStatus: TextView
     private lateinit var tvResponse: TextView
     private lateinit var btnMic: Button
     private lateinit var etServerUrl: EditText
     private lateinit var btnSaveServer: Button
+    private lateinit var btnTestConnection: Button
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -44,18 +52,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Simple Dynamic Programmatic Layout (No XML inflate required for clean compilation)
-        val layout = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(48, 80, 48, 48)
+
+        // Programmatic Dark Theme Layout
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 60, 48, 48)
             gravity = android.view.Gravity.CENTER_HORIZONTAL
             setBackgroundColor(android.graphics.Color.parseColor("#0F172A"))
         }
 
         val tvTitle = TextView(this).apply {
             text = "🤖 Alya AI Voice Assistant"
-            textSize = 24f
+            textSize = 22f
             setTextColor(android.graphics.Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
             gravity = android.view.Gravity.CENTER
@@ -63,52 +71,90 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         layout.addView(tvTitle)
 
         val tvSubtitle = TextView(this).apply {
-            text = "Gemini-style Autonomous Mobile Agent"
-            textSize = 14f
+            text = "Autonomous Mobile Voice Agent"
+            textSize = 13f
             setTextColor(android.graphics.Color.parseColor("#94A3B8"))
             gravity = android.view.Gravity.CENTER
-            setPadding(0, 10, 0, 40)
+            setPadding(0, 8, 0, 24)
         }
         layout.addView(tvSubtitle)
 
+        // Server Config Label
+        val tvServerLabel = TextView(this).apply {
+            text = "🌐 EC2 / Cloud Rasa Server URL:"
+            textSize = 13f
+            setTextColor(android.graphics.Color.parseColor("#38BDF8"))
+            setPadding(0, 0, 0, 8)
+        }
+        layout.addView(tvServerLabel)
+
+        val savedUrl = getSavedServerUrl()
         etServerUrl = EditText(this).apply {
-            hint = "EC2 Server URL (e.g. http://127.0.0.1:5005)"
-            setText(getSharedPreferences("AlyaPrefs", Context.MODE_PRIVATE).getString("server_url", "http://127.0.0.1:5005"))
+            hint = "e.g. $DEFAULT_SERVER_URL"
+            setText(savedUrl)
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.GRAY)
             setBackgroundColor(android.graphics.Color.parseColor("#1E293B"))
-            setPadding(30, 30, 30, 30)
+            setPadding(30, 24, 30, 24)
         }
         layout.addView(etServerUrl)
 
+        // Button Container for Save & Test Connection
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 16, 0, 24)
+        }
+
         btnSaveServer = Button(this).apply {
-            text = "Save Server IP"
+            text = "💾 Save URL"
             setBackgroundColor(android.graphics.Color.parseColor("#3B82F6"))
             setTextColor(android.graphics.Color.WHITE)
             setOnClickListener {
-                val url = etServerUrl.text.toString().trim()
-                getSharedPreferences("AlyaPrefs", Context.MODE_PRIVATE).edit().putString("server_url", url).apply()
-                Toast.makeText(this@MainActivity, "Server URL Saved: $url", Toast.LENGTH_SHORT).show()
+                val cleanedUrl = sanitizeServerUrl(etServerUrl.text.toString())
+                etServerUrl.setText(cleanedUrl)
+                saveServerUrl(cleanedUrl)
+                Toast.makeText(this@MainActivity, "Server URL Saved: $cleanedUrl", Toast.LENGTH_SHORT).show()
+                tvStatus.text = "Server URL saved: $cleanedUrl"
             }
         }
-        layout.addView(btnSaveServer)
+        val btnParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+            setMargins(0, 0, 10, 0)
+        }
+        btnRow.addView(btnSaveServer, btnParams)
+
+        btnTestConnection = Button(this).apply {
+            text = "⚡ Test Connect"
+            setBackgroundColor(android.graphics.Color.parseColor("#6366F1"))
+            setTextColor(android.graphics.Color.WHITE)
+            setOnClickListener {
+                val url = sanitizeServerUrl(etServerUrl.text.toString())
+                testServerConnection(url)
+            }
+        }
+        val testBtnParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+            setMargins(10, 0, 0, 0)
+        }
+        btnRow.addView(btnTestConnection, testBtnParams)
+
+        layout.addView(btnRow)
 
         tvStatus = TextView(this).apply {
             text = "Tap the button below and speak to Alya"
-            textSize = 16f
+            textSize = 15f
             setTextColor(android.graphics.Color.parseColor("#38BDF8"))
             gravity = android.view.Gravity.CENTER
-            setPadding(0, 50, 0, 30)
+            setPadding(0, 16, 0, 20)
         }
         layout.addView(tvStatus)
 
         btnMic = Button(this).apply {
             text = "🎙️ TAP TO SPEAK (HEY ALYA)"
-            textSize = 18f
+            textSize = 17f
             setTypeface(null, android.graphics.Typeface.BOLD)
             setBackgroundColor(android.graphics.Color.parseColor("#10B981"))
             setTextColor(android.graphics.Color.WHITE)
-            setPadding(40, 50, 40, 50)
+            setPadding(30, 40, 30, 40)
             setOnClickListener {
                 startVoiceRecognition()
             }
@@ -117,9 +163,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         tvResponse = TextView(this).apply {
             text = "Alya replies will appear here..."
-            textSize = 15f
+            textSize = 14f
             setTextColor(android.graphics.Color.parseColor("#E2E8F0"))
-            setPadding(20, 40, 20, 20)
+            setPadding(16, 30, 16, 16)
         }
         layout.addView(tvResponse)
 
@@ -128,6 +174,63 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
         checkAndRequestPermissions()
         initSpeechRecognizer()
+    }
+
+    private fun sanitizeServerUrl(rawUrl: String): String {
+        var clean = rawUrl.trim()
+        if (clean.isEmpty()) {
+            return DEFAULT_SERVER_URL
+        }
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = "http://$clean"
+        }
+        if (clean.endsWith("/")) {
+            clean = clean.dropLast(1)
+        }
+        return clean
+    }
+
+    private fun getSavedServerUrl(): String {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+    }
+
+    private fun saveServerUrl(url: String) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_SERVER_URL, url).apply()
+    }
+
+    private fun testServerConnection(serverBase: String) {
+        runOnUiThread {
+            tvStatus.text = "🔄 Testing connection to $serverBase..."
+        }
+
+        executor.execute {
+            try {
+                val versionUrl = URL("$serverBase/version")
+                val conn = versionUrl.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                val code = conn.responseCode
+
+                if (code == 200) {
+                    val response = conn.inputStream.bufferedReader().use { it.readText() }
+                    runOnUiThread {
+                        tvStatus.text = "🟢 Connected! EC2 Rasa Server Online.\nResponse: $response"
+                        Toast.makeText(this@MainActivity, "Connected to EC2 Server!", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    runOnUiThread {
+                        tvStatus.text = "⚠️ Server responded with HTTP $code"
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    tvStatus.text = "🔴 Connection Failed: ${e.message}\nEnsure EC2 Port 5005 Security Group is open."
+                }
+            }
+        }
     }
 
     private fun checkAndRequestPermissions() {
@@ -188,7 +291,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun sendToAlyaServer(message: String) {
-        val serverBase = getSharedPreferences("AlyaPrefs", Context.MODE_PRIVATE).getString("server_url", "http://127.0.0.1:5005")
+        val serverBase = sanitizeServerUrl(getSavedServerUrl())
         val endpoint = "$serverBase/webhooks/rest/webhook"
 
         executor.execute {
@@ -231,10 +334,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
                     speakOut(finalReply)
                     handleIntentTriggers(finalReply)
+                } else {
+                    runOnUiThread {
+                        tvResponse.text = "HTTP Error: ${conn.responseCode} from server."
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    tvResponse.text = "Connection Error: ${e.message}\nPlease check Server URL."
+                    tvResponse.text = "Connection Error: ${e.message}\nPlease check Server URL ($serverBase)."
                 }
             }
         }

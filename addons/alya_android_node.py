@@ -17,8 +17,8 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Rasa EC2 Server Endpoint (Change to your public IP / Domain / Ngrok URL)
-EC2_RASA_URL = os.getenv("RASA_SERVER_URL", "http://127.0.0.1:5005")
+# Rasa EC2 Server Endpoint (Public EC2 IP / Domain / Ngrok URL)
+EC2_RASA_URL = os.getenv("RASA_SERVER_URL", "http://3.90.20.247:5005")
 
 
 def run_termux_cmd(cmd_list):

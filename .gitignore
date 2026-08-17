@@ -14,6 +14,14 @@ __pycache__/
 models/*.tar.gz
 !models/20260817-130151-tattered-canon.tar.gz
 
+# Android artifacts and secrets
+android_app/.gradle/
+android_app/app/build/
+android_app/build/
+android_app/local.properties
+*.keystore
+*.jks
+
 # System files
 .DS_Store
 *.log

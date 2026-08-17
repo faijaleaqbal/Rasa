@@ -37,9 +37,27 @@ Push this repo to GitHub; GitHub Actions will automatically compile and provide 
 
 1. **Open Alya App on Phone**:
    - Grant permissions for **Microphone, Phone Calls, SMS, and Contacts**.
-2. **Set Server IP**:
-   - Enter your EC2 Public IP or Domain (e.g. `http://YOUR_EC2_IP:5005` or Ngrok URL) and tap **Save Server IP**.
+2. **Server IP Configuration**:
+   - The default URL is set to your EC2 Server: `http://3.90.20.247:5005`
+   - *(Note: Do NOT use `127.0.0.1` on a physical phone, as `127.0.0.1` means the phone itself).*
+   - Tap **"⚡ Test Connect"** to verify that your phone can reach the EC2 Rasa server.
+   - Tap **"💾 Save URL"** to store your configuration.
 3. **Set as Default Android Digital Assistant**:
    - Go to Phone **Settings ➔ Apps ➔ Default Apps ➔ Digital Assistant App**.
    - Select **Alya AI Assistant**.
    - Now, holding your phone's Power Button or swiping up from bottom corner will immediately launch Alya!
+
+---
+
+## 🔒 Important EC2 & Network Requirements
+
+1. **AWS EC2 Security Group (Port 5005)**:
+   - In AWS EC2 Console ➔ Security Groups ➔ Edit Inbound Rules:
+     - **Type**: Custom TCP
+     - **Port Range**: `5005`
+     - **Source**: `0.0.0.0/0` (Anywhere)
+2. **Cleartext Traffic (HTTP)**:
+   - `android:usesCleartextTraffic="true"` is enabled in `AndroidManifest.xml` to allow standard `http://` communication directly to port 5005.
+3. **Optional (HTTPS / Domain / Ngrok)**:
+   - If you want HTTPS encryption, you can use the Nginx reverse proxy configured on port 443 or run `./start_ngrok.sh` and enter the `https://xxxx.ngrok-free.app` URL into the app.
+
