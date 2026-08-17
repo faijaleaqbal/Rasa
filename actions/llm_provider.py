@@ -48,7 +48,7 @@ class LLMProviderManager:
                 "name": "Groq",
                 "url": "https://api.groq.com/openai/v1/chat/completions",
                 "key": os.getenv("GROQ_API_KEY", ""),
-                "models": [os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b"), "groq/compound-mini"],
+                "models": [os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"), "qwen/qwen3.6-27b", "openai/gpt-oss-120b"],
                 "headers": lambda k: {"Authorization": f"Bearer {k}"}
             },
             {
@@ -63,9 +63,8 @@ class LLMProviderManager:
                 "url": "https://openrouter.ai/api/v1/chat/completions",
                 "key": os.getenv("OPENROUTER_API_KEY", ""),
                 "models": [
-                    os.getenv("OPENROUTER_MODEL", "z-ai/glm-5.2:free"),
-                    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-                    "google/gemma-4-26b-a4b-it:free"
+                    os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"),
+                    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
                 ],
                 "headers": lambda k: {
                     "Authorization": f"Bearer {k}",
