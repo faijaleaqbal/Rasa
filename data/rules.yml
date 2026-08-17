@@ -1,0 +1,58 @@
+version: "3.1"
+
+rules:
+
+- rule: Say goodbye anytime the user says goodbye
+  steps:
+  - intent: goodbye
+  - action: utter_goodbye
+
+- rule: Say 'I am a bot' anytime the user challenges
+  steps:
+  - intent: bot_challenge
+  - action: utter_iamabot
+
+- rule: Handle weather query directly
+  steps:
+  - intent: ask_weather
+  - action: action_get_weather
+
+- rule: Handle news query directly
+  steps:
+  - intent: ask_news
+  - action: action_get_news
+
+- rule: Handle crypto query directly
+  steps:
+  - intent: ask_crypto
+  - action: action_get_crypto
+
+- rule: Handle server health query directly
+  steps:
+  - intent: server_health
+  - action: action_server_health
+
+- rule: Handle speed test directly
+  steps:
+  - intent: speed_test
+  - action: action_speed_test
+
+- rule: Handle list habits directly
+  steps:
+  - intent: list_habits
+  - action: action_list_habits
+
+- rule: Handle list todos directly
+  steps:
+  - intent: list_todos
+  - action: action_list_todos
+
+- rule: Handle list notes directly
+  steps:
+  - intent: list_notes
+  - action: action_list_notes
+
+- rule: Fallback routing to LLM response
+  steps:
+  - intent: nlu_fallback
+  - action: action_llm_response

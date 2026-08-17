@@ -1,0 +1,271 @@
+version: "3.1"
+
+nlu:
+- intent: greet
+  examples: |
+    - hey
+    - hello
+    - hi
+    - hello there
+    - good morning
+    - good evening
+    - hey there
+    - namaste
+    - namaskar
+    - pranam
+    - hello bhai
+    - hey buddy
+    - kaisa hai
+    - kaise ho
+    - kaise ho bhai
+    - kya haal hai
+    - kya haal chaal
+    - sup bro
+    - yo bro
+    - kem cho
+    - sab badhiya bhai
+    - hello dost
+    - hi yaar
+    - kaisa chal raha hai
+
+- intent: goodbye
+  examples: |
+    - bye
+    - goodbye
+    - see you later
+    - good night
+    - have a nice day
+    - see you around
+    - bye bye
+    - cya
+    - chalo bye
+    - alvida
+    - milte hai baad me
+    - phir milenge
+    - baad me baat karte hai
+    - see you bhai
+    - ta-ta
+    - bye dost
+    - good night bro
+    - chalta hu bhai
+    - chalo phir milte hai
+
+- intent: affirm
+  examples: |
+    - yes
+    - y
+    - indeed
+    - of course
+    - that sounds good
+    - correct
+    - definitely
+    - sure
+    - haan
+    - haanji
+    - bilkul
+    - sahi hai
+    - yes bhai
+    - sure dost
+    - pakka
+    - bilkul sahi
+    - chalega
+    - haan bilkul
+    - done bhai
+    - haan theek hai
+    - sahi baat hai
+
+- intent: deny
+  examples: |
+    - no
+    - n
+    - never
+    - I don't think so
+    - don't like that
+    - no way
+    - not really
+    - nope
+    - nahi
+    - na
+    - na bhai
+    - mat karo
+    - bilkul nahi
+    - aisa nahi hai
+    - nahi chahiye
+    - bilkul galat
+    - galat hai
+    - bilkul pasand nahi aaya
+    - nahi yaar
+
+- intent: mood_great
+  examples: |
+    - perfect
+    - great
+    - amazing
+    - feeling like a king
+    - wonderful
+    - I am feeling very good
+    - I am great
+    - I am amazing
+    - super stoked
+    - extremely good
+    - bohot badhiya
+    - maza aa gaya
+    - mast hu
+    - ekdum badhiya
+    - zabardast
+    - awesome bhai
+    - top notch
+    - badiya hu
+    - khush hu aaj
+    - sab first class hai
+    - ekdum mast chal raha hai
+
+- intent: mood_unhappy
+  examples: |
+    - my day was horrible
+    - I am sad
+    - I don't feel very well
+    - I am disappointed
+    - super sad
+    - I'm so sad
+    - sad
+    - very sad
+    - unhappy
+    - not good
+    - mood kharab hai
+    - bohot sad hu
+    - dukhi hu
+    - din bekar tha
+    - tension me hu
+    - mood off hai
+    - achha nahi lag raha
+    - thoda pareshan hu
+    - bura din tha
+    - dimag kharab ho raha hai
+
+- intent: bot_challenge
+  examples: |
+    - are you a bot?
+    - are you a human?
+    - am I talking to a bot?
+    - am I talking to a human?
+    - tu bot hai kya?
+    - kya tum robot ho?
+    - tu AI hai ya insaan?
+    - are you real person or bot?
+    - insaan ho ya computer?
+    - kya tu ek machine hai?
+    - tu koun hai bhai?
+
+- intent: ask_weather
+  examples: |
+    - /weather
+    - /weather Mumbai
+    - /weather Delhi
+    - what is the weather today?
+    - weather forecast
+    - how is the weather in Delhi?
+    - mausam kaisa hai?
+    - aaj barish hogi kya?
+    - weather batao
+    - Delhi me mausam kaisa hai
+    - Mumbai weather update
+    - current temperature kya hai
+    - kya aaj dhoop niklegi
+
+- intent: ask_news
+  examples: |
+    - /news
+    - /news tech
+    - give me today's news
+    - top news headlines
+    - latest news update
+    - aaj ki taaza khabar
+    - news sunao
+    - kya chal raha hai duniya me
+    - news digest
+    - top headlines in India
+    - daily news update
+    - headlines batao
+
+- intent: ask_crypto
+  examples: |
+    - /crypto
+    - /crypto btc
+    - crypto prices
+    - what is bitcoin price?
+    - btc rate today
+    - crypto market status
+    - ethereum price in inr
+    - solana price
+    - crypto update
+    - btc kitne ka chal raha hai
+    - crypto price check
+    - live crypto rates
+
+- intent: server_health
+  examples: |
+    - /serverstatus
+    - /health
+    - /status
+    - server status
+    - system health
+    - server health check
+    - cpu usage kya hai
+    - ec2 instance status
+    - check system resources
+    - kitna ram use ho raha hai
+    - disk space kitna bacha hai
+    - server kaisa chal raha hai
+    - system diagnostics
+
+- intent: speed_test
+  examples: |
+    - /speedtest
+    - run speed test
+    - internet speed test
+    - internet speed check karo
+    - speedtest
+    - bandwidth test
+    - test connection speed
+    - server internet speed
+    - download speed kitni hai
+    - check internet speed
+
+- intent: list_habits
+  examples: |
+    - /habit
+    - /habits
+    - show my habits
+    - habit tracker
+    - meri habits dikhao
+    - streaks status
+    - daily habits list
+    - kya habits track ho rahi hai
+    - habit streak check
+    - habit progress
+
+- intent: list_todos
+  examples: |
+    - /todos
+    - /todo
+    - show my tasks
+    - to-do list
+    - pending tasks
+    - mere tasks dikhao
+    - kya kya karna hai aaj
+    - list all todos
+    - todo list check
+    - task manager
+
+- intent: list_notes
+  examples: |
+    - /notes
+    - /note
+    - show my notes
+    - list saved notes
+    - mere notes dikhao
+    - notes list
+    - saved notes search
+    - fetch my notes
+    - view notes

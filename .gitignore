@@ -1,0 +1,19 @@
+# Environment variables and secrets
+.env
+.env.local
+storage/auth/
+storage/data.db
+storage/files/
+
+# Python & Rasa artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.rasa/
+models/*.tar.gz
+!models/20260817-130151-tattered-canon.tar.gz
+
+# System files
+.DS_Store
+*.log

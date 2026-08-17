@@ -1,0 +1,580 @@
+import os
+import re
+import time
+import json
+import logging
+import psutil
+from datetime import datetime, date, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+import requests
+
+from . import db
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# 20. Reminders (General-purpose, time-based)
+# ---------------------------------------------------------------------------
+
+def create_reminder(user_id: str, chat_id: str, text: str, time_str: str) -> str:
+    """
+    Creates a time-based reminder.
+    `time_str` can be ISO date/time or natural offsets like 'in 10 minutes', 'tomorrow at 9am'.
+    """
+    # Simple natural offset parsing
+    now = datetime.now()
+    due_dt = None
+
+    time_lower = time_str.lower().strip()
+    match_mins = re.search(r"in\s+(\d+)\s+(minute|min|m)", time_lower)
+    match_hours = re.search(r"in\s+(\d+)\s+(hour|hr|h)", time_lower)
+    match_days = re.search(r"in\s+(\d+)\s+(day|d)", time_lower)
+
+    if match_mins:
+        mins = int(match_mins.group(1))
+        due_dt = now + timedelta(minutes=mins)
+    elif match_hours:
+        hrs = int(match_hours.group(1))
+        due_dt = now + timedelta(hours=hrs)
+    elif match_days:
+        dys = int(match_days.group(1))
+        due_dt = now + timedelta(days=dys)
+    else:
+        try:
+            due_dt = datetime.fromisoformat(time_str)
+        except Exception:
+            due_dt = now + timedelta(hours=1)
+
+    due_iso = due_dt.isoformat()
+    rem_id = db.add_reminder(user_id, chat_id, text, due_iso, reminder_type="general")
+    return f"⏰ **Reminder Set (ID: #{rem_id})!**\n• Note: {text}\n• Due: `{due_dt.strftime('%B %d, %Y at %I:%M %p')}`"
+
+
+def list_user_reminders(user_id: str) -> str:
+    """Lists all active reminders for the user."""
+    rems = db.get_active_reminders(user_id)
+    if not rems:
+        return "⏰ You have no pending reminders."
+
+    lines = []
+    for r in rems:
+        lines.append(f"• **[#{r['id']}]** {r['text']} (Due: `{r['due_time'][:16]}`)")
+    return "⏰ **Your Active Reminders:**\n\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 21. Medicine Reminders
+# ---------------------------------------------------------------------------
+
+def add_medicine_schedule(user_id: str, name: str, dosage: str, schedule_time: str, instructions: str = "") -> str:
+    """Adds a recurring medicine reminder."""
+    med_id = db.add_medicine(user_id, name, dosage, schedule_time, instructions)
+    return f"💊 **Medicine Reminder Added (ID: #{med_id}):**\n• Medicine: **{name}**\n• Dosage: `{dosage}`\n• Time: `{schedule_time}`\n• Instructions: {instructions or 'None'}"
+
+
+def list_medicine_schedules(user_id: str) -> str:
+    """Lists scheduled medicines."""
+    meds = db.get_medicines(user_id)
+    if not meds:
+        return "💊 No active medicine schedules found."
+
+    lines = []
+    for m in meds:
+        lines.append(f"• **[#{m['id']}] {m['name']}** — `{m['dosage']}` at `{m['schedule_time']}` ({m['instructions'] or 'Take with water'})")
+    return "💊 **Your Medicine Schedule:**\n\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 22. Note-Taking
+# ---------------------------------------------------------------------------
+
+def save_user_note(user_id: str, title: str, content: str, tags: str = "") -> str:
+    """Saves a new note to SQLite."""
+    note_id = db.add_note(user_id, title, content, tags)
+    return f"📝 **Note Saved (ID: #{note_id})!**\n• Title: **{title}**\n• Tags: `{tags or 'general'}`"
+
+
+def search_user_notes(user_id: str, query: Optional[str] = None) -> str:
+    """Searches or lists recent notes."""
+    notes = db.get_notes(user_id, query)
+    if not notes:
+        return f"📝 No notes found{' matching ' + query if query else ''}."
+
+    lines = []
+    for n in notes:
+        lines.append(f"📌 **[#{n['id']}] {n['title']}** (Updated: `{n['updated_at'][:10]}`)\n   {n['content']}\n   _Tags: {n['tags'] or 'None'}_")
+    return f"📝 **Your Notes ({len(notes)}):**\n\n" + "\n\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 23. Task / To-Do Manager
+# ---------------------------------------------------------------------------
+
+def add_user_todo(user_id: str, title: str, priority: str = "medium", due_date: Optional[str] = None) -> str:
+    """Adds a task to the to-do list."""
+    todo_id = db.add_todo(user_id, title, priority, due_date)
+    return f"✅ **Task Added (ID: #{todo_id})!**\n• Task: **{title}**\n• Priority: `{priority.upper()}`\n• Due: `{due_date or 'No deadline'}`"
+
+
+def list_user_todos(user_id: str, status: str = "pending") -> str:
+    """Lists tasks by status."""
+    todos = db.get_todos(user_id, status)
+    if not todos:
+        return f"📋 No {status} tasks found. You're all caught up!"
+
+    lines = []
+    for t in todos:
+        p_icon = "🔴" if t['priority'] == "high" else "🟡" if t['priority'] == "medium" else "🟢"
+        lines.append(f"• **[#{t['id']}]** {p_icon} {t['title']} (Due: `{t['due_date'] or 'N/A'}`)")
+    return f"📋 **To-Do List ({status.upper()}):**\n\n" + "\n".join(lines)
+
+
+def complete_user_todo(user_id: str, todo_id: int) -> str:
+    """Marks a task as completed."""
+    if db.complete_todo(user_id, todo_id):
+        return f"🎉 **Task #{todo_id} marked as completed!** Great job!"
+    return f"❌ Task #{todo_id} not found."
+
+
+# ---------------------------------------------------------------------------
+# 24. Expense & Finance Tracker
+# ---------------------------------------------------------------------------
+
+def log_user_expense(user_id: str, amount: float, category: str, description: str) -> str:
+    """Logs a new expense."""
+    exp_id = db.add_expense(user_id, amount, category, description)
+    return f"💰 **Expense Logged (ID: #{exp_id}):**\n• Amount: **₹{amount:,.2f}**\n• Category: `{category.title()}`\n• Description: {description}"
+
+
+def get_user_finance_summary(user_id: str, month: Optional[str] = None) -> str:
+    """Generates monthly expense summary and category breakdown."""
+    data = db.get_expense_summary(user_id, month)
+    total = data["total"]
+    m_str = data["month"]
+
+    if total == 0.0:
+        return f"📊 No expenses logged for `{m_str}`."
+
+    cat_lines = []
+    for c in data["categories"]:
+        cat_lines.append(f"• **{c['category'].title()}**: ₹{c['cat_total']:,.2f} ({c['count']} transactions)")
+
+    recent_lines = []
+    for r in data["recent"]:
+        recent_lines.append(f"  - `{r['expense_date']}`: ₹{r['amount']:,.2f} — {r['description']} (`{r['category']}`)")
+
+    res = (
+        f"📊 **Expense Summary for `{m_str}`:**\n\n"
+        f"💵 **Total Spent: ₹{total:,.2f}**\n\n"
+        f"**Category Breakdown:**\n" + "\n".join(cat_lines) + "\n\n"
+        f"**Recent Transactions:**\n" + "\n".join(recent_lines)
+    )
+    return res
+
+
+# ---------------------------------------------------------------------------
+# 25. Bill & Utility Payment Reminders
+# ---------------------------------------------------------------------------
+
+def add_user_bill(user_id: str, title: str, amount: float, due_date: str) -> str:
+    """Adds an upcoming bill."""
+    bill_id = db.add_bill(user_id, title, amount, due_date)
+    return f"🧾 **Bill Added (ID: #{bill_id}):**\n• Bill: **{title}**\n• Amount: **₹{amount:,.2f}**\n• Due Date: `{due_date}`"
+
+
+def list_user_bills(user_id: str) -> str:
+    """Lists unpaid and upcoming bills."""
+    bills = db.get_bills(user_id, status="unpaid")
+    if not bills:
+        return "🧾 No unpaid bills pending! Everything is settled."
+
+    lines = []
+    for b in bills:
+        lines.append(f"• **[#{b['id']}] {b['title']}** — **₹{b['amount']:,.2f}** (Due: `{b['due_date']}`)")
+    return "🧾 **Upcoming & Unpaid Bills:**\n\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 26. Bank & UPI Transaction Alert Parser
+# ---------------------------------------------------------------------------
+
+def parse_bank_transaction_sms(user_id: str, message_text: str) -> str:
+    """
+    Parses SMS/email alert texts from Indian banks (SBI, HDFC, ICICI, Axis, Paytm, GPay, PhonePe).
+    Auto-logs debit transactions to expenses!
+    """
+    # Regex patterns for amount, debit/credit, merchant, balance
+    amt_match = re.search(r"(?:Rs\.?|INR|₹)\s*([\d,]+(?:\.\d{2})?)", message_text, re.IGNORECASE)
+    type_match = re.search(r"\b(debited|spent|paid|credited|received)\b", message_text, re.IGNORECASE)
+    acct_match = re.search(r"(?:a/c|account|card|vpa)\s*(?:no\.?)?\s*([xX\*\d]{4,})", message_text, re.IGNORECASE)
+    bal_match = re.search(r"(?:avl\s*bal|balance|bal)\s*(?:is|:)?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+(?:\.\d{2})?)", message_text, re.IGNORECASE)
+
+    if not amt_match:
+        return "⚠️ Could not parse a valid transaction amount from this text."
+
+    raw_amt = amt_match.group(1).replace(",", "")
+    amount = float(raw_amt)
+    tx_type = type_match.group(1).lower() if type_match else "debited"
+    acct = acct_match.group(1) if acct_match else "Bank A/c"
+    balance = bal_match.group(1) if bal_match else "N/A"
+
+    # Infer category
+    category = "general"
+    lower_txt = message_text.lower()
+    if any(k in lower_txt for k in ["swiggy", "zomato", "restaurant", "food", "cafe"]):
+        category = "food"
+    elif any(k in lower_txt for k in ["uber", "ola", "metro", "fuel", "petrol", "transport"]):
+        category = "transport"
+    elif any(k in lower_txt for k in ["amazon", "flipkart", "myntra", "shopping"]):
+        category = "shopping"
+    elif any(k in lower_txt for k in ["electricity", "bill", "recharge", "wifi", "broadband"]):
+        category = "utilities"
+
+    if tx_type in ["debited", "spent", "paid"]:
+        exp_id = db.add_expense(user_id, amount, category, f"Auto-parsed bank transaction ({acct})")
+        return (
+            f"🏦 **Bank Transaction Detected & Auto-Logged!**\n\n"
+            f"• Type: 🔴 **Debit ({tx_type.upper()})**\n"
+            f"• Amount: **₹{amount:,.2f}**\n"
+            f"• Account: `{acct}`\n"
+            f"• Auto Category: `{category.title()}`\n"
+            f"• Available Balance: `₹{balance}`\n"
+            f"• Saved to Expenses (ID: `#{exp_id}`)"
+        )
+    else:
+        return (
+            f"🏦 **Credit Transaction Detected!**\n\n"
+            f"• Type: 🟢 **Credit ({tx_type.upper()})**\n"
+            f"• Amount: **₹{amount:,.2f}**\n"
+            f"• Account: `{acct}`\n"
+            f"• Available Balance: `₹{balance}`"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 27. Website & Price Monitoring
+# ---------------------------------------------------------------------------
+
+def add_url_monitor(user_id: str, url: str, title: str, target_price: Optional[float] = None) -> str:
+    """Adds a website URL for periodic uptime & price tracking."""
+    mon_id = db.add_price_monitor(user_id, url, title, target_price)
+    return f"🌐 **Website Monitor Active (ID: #{mon_id}):**\n• Target: [{title}]({url})\n• Alert Target Price: {f'₹{target_price}' if target_price else 'Any change'}"
+
+
+def check_url_status(url: str) -> str:
+    """Performs instant health/status check on a URL."""
+    try:
+        start_t = time.time()
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "AlyaMonitor/1.0"})
+        latency_ms = int((time.time() - start_t) * 1000)
+        status_icon = "🟢" if resp.status_code == 200 else "🟡" if resp.status_code < 400 else "🔴"
+        return f"🌐 **Website Status Check:**\n• URL: `{url}`\n• Status: {status_icon} `{resp.status_code} {resp.reason}`\n• Latency: `{latency_ms} ms`\n• Content Size: `{len(resp.content):,} bytes`"
+    except Exception as e:
+        return f"🔴 **Website Unreachable:** {url}\n• Error: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# 28. Traffic & Commute ETA (OpenRouteService Matrix & Google Maps)
+# ---------------------------------------------------------------------------
+
+def get_commute_eta(origin: str, destination: str) -> str:
+    """Calculates driving distance, duration, and ETA between two locations via OpenRouteService Matrix API."""
+    ors_key = os.getenv("OPENROUTESERVICE_API_KEY")
+    
+    if ors_key:
+        try:
+            def geocode_ors(place: str):
+                url = f"https://api.openrouteservice.org/geocode/search?api_key={ors_key}&text={requests.utils.quote(place)}"
+                r = requests.get(url, timeout=8)
+                if r.status_code == 200:
+                    feat = r.json().get("features", [])
+                    if feat:
+                        return feat[0]["geometry"]["coordinates"]  # [lon, lat]
+                return None
+
+            c_orig = geocode_ors(origin)
+            c_dest = geocode_ors(destination)
+
+            if c_orig and c_dest:
+                matrix_url = "https://api.openrouteservice.org/v2/matrix/driving-car"
+                headers = {"Authorization": ors_key, "Content-Type": "application/json"}
+                body = {
+                    "locations": [c_orig, c_dest],
+                    "metrics": ["distance", "duration"]
+                }
+                resp = requests.post(matrix_url, json=body, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                    distances = res_json.get("distances", [[]])
+                    durations = res_json.get("durations", [[]])
+
+                    if distances and len(distances[0]) > 1 and durations and len(durations[0]) > 1:
+                        meters = distances[0][1]
+                        seconds = durations[0][1]
+
+                        if meters is not None and seconds is not None:
+                            km = meters / 1000.0
+                            mins_total = int(seconds / 60)
+                            hours = mins_total // 60
+                            mins = mins_total % 60
+
+                            dur_str = f"{hours} hr {mins} mins" if hours > 0 else f"{mins} mins"
+                            return (
+                                f"🚗 **Commute ETA & Distance (OpenRouteService):**\n"
+                                f"• Route: **{origin}** ➔ **{destination}**\n"
+                                f"• Driving Distance: **`{km:.1f} km`**\n"
+                                f"• Estimated Travel Time: **`{dur_str}`**\n"
+                                f"• Real-time Route Map: https://www.google.com/maps/dir/{requests.utils.quote(origin)}/{requests.utils.quote(destination)}"
+                            )
+        except Exception as e:
+            logger.warning(f"OpenRouteService error: {e}")
+
+    # Fallback to Google Maps if key present
+    gmaps_key = os.getenv("GOOGLE_MAPS_API_KEY")
+    if gmaps_key:
+        try:
+            url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={requests.utils.quote(origin)}&destinations={requests.utils.quote(destination)}&mode=driving&key={gmaps_key}"
+            resp = requests.get(url, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                el = data["rows"][0]["elements"][0]
+                if el.get("status") == "OK":
+                    dist = el["distance"]["text"]
+                    dur = el["duration"]["text"]
+                    return f"🚗 **Commute ETA (Google Maps):**\n• Route: **{origin}** ➔ **{destination}**\n• Distance: `{dist}`\n• Driving Time: **`{dur}`**"
+        except Exception as e:
+            logger.warning(f"Google Maps API error: {e}")
+
+    # Fallback to search-based route estimate
+    return f"🚗 **Commute Route:**\n• Route: **{origin}** ➔ **{destination}**\n• Check Live Traffic: https://www.google.com/maps/dir/{requests.utils.quote(origin)}/{requests.utils.quote(destination)}"
+
+
+# ---------------------------------------------------------------------------
+# 29. Ride & Cab Fare Estimate (Uber / Ola Pricing Model)
+# ---------------------------------------------------------------------------
+
+def estimate_cab_fare(distance_km: float, time_mins: Optional[float] = None) -> str:
+    """Estimates ride fares for Uber & Ola across vehicle types."""
+    if not time_mins:
+        time_mins = distance_km * 3.0  # Approx 20 km/h in Indian city traffic
+
+    # Dynamic pricing formula for Indian city cabs
+    # Uber Auto / Ola Auto
+    auto_fare = 30 + (distance_km * 15) + (time_mins * 1.5)
+    # Uber Go / Ola Mini
+    sedan_fare = 50 + (distance_km * 18) + (time_mins * 2.0)
+    # Uber Premier / Ola Prime
+    premier_fare = 80 + (distance_km * 24) + (time_mins * 2.5)
+    # Moto / Bike
+    bike_fare = 20 + (distance_km * 9) + (time_mins * 1.0)
+
+    return (
+        f"🚖 **Estimated Cab / Ride Fares ({distance_km:.1f} km, ~{int(time_mins)} mins):**\n\n"
+        f"• 🛵 **Bike Taxi (Uber Moto / Rapido):** `₹{bike_fare:.0f} - ₹{bike_fare*1.2:.0f}`\n"
+        f"• 🛺 **Auto Rickshaw:** `₹{auto_fare:.0f} - ₹{auto_fare*1.2:.0f}`\n"
+        f"• 🚗 **Uber Go / Ola Mini:** `₹{sedan_fare:.0f} - ₹{sedan_fare*1.2:.0f}`\n"
+        f"• 🚘 **Uber Premier / Prime Sedan:** `₹{premier_fare:.0f} - ₹{premier_fare*1.2:.0f}`\n\n"
+        f"_Note: Actual prices may vary based on live surge and traffic._"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 30. Package & Order Delivery Tracking
+# ---------------------------------------------------------------------------
+
+def track_delivery_package(tracking_number: str) -> str:
+    """Identifies courier service and provides parcel tracking status."""
+    clean_num = tracking_number.strip().upper()
+
+    # Detect carrier
+    carrier = "Universal Courier"
+    if clean_num.startswith(("EM", "EA", "CP", "RR")) and clean_num.endswith("IN"):
+        carrier = "India Post (Speed Post)"
+    elif len(clean_num) in [8, 9] and clean_num.isdigit():
+        carrier = "Blue Dart"
+    elif clean_num.startswith(("D", "B")) and len(clean_num) > 8:
+        carrier = "DTDC"
+    elif len(clean_num) == 12 and clean_num.isdigit():
+        carrier = "FedEx / Delhivery"
+    elif clean_num.startswith("1Z"):
+        carrier = "UPS"
+
+    return (
+        f"📦 **Parcel Tracking for `{clean_num}`:**\n\n"
+        f"• Detected Carrier: **{carrier}**\n"
+        f"• 17Track Global: https://www.17track.net/en/track?nums={clean_num}\n"
+        f"• AfterShip: https://www.aftership.com/track/{clean_num}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 31. Movie & Event Showtimes Check
+# ---------------------------------------------------------------------------
+
+def search_movie_showtimes(movie_title: str, city: str = "Mumbai") -> str:
+    """Searches showtimes and cinema availability."""
+    clean_m = movie_title.strip()
+    clean_c = city.strip().lower()
+    bms_url = f"https://in.bookmyshow.com/explore/movies-{clean_c}?search={requests.utils.quote(clean_m)}"
+    paytm_url = f"https://paytm.com/movies/{clean_c}"
+    return (
+        f"🎟️ **Showtimes & Cinema Check for '{clean_m}' in {city.title()}:**\n\n"
+        f"• BookMyShow: [Check Theatres & Book Tickets]({bms_url})\n"
+        f"• Paytm Movies: [Check Paytm Showtimes]({paytm_url})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 32. Internet Speed Test Trigger
+# ---------------------------------------------------------------------------
+
+def run_internet_speedtest() -> str:
+    """Executes internet speed test on the server using speedtest-cli."""
+    try:
+        import speedtest
+        st = speedtest.Speedtest()
+        st.get_best_server()
+        download_mbps = st.download() / 1_000_000
+        upload_mbps = st.upload() / 1_000_000
+        ping_ms = st.results.ping
+
+        return (
+            f"⚡ **Internet Speed Test Results (Server):**\n\n"
+            f"• 📥 **Download Speed:** `{download_mbps:.2f} Mbps`\n"
+            f"• 📤 **Upload Speed:** `{upload_mbps:.2f} Mbps`\n"
+            f"• 📶 **Ping Latency:** `{ping_ms:.1f} ms`\n"
+            f"• 🏢 Server Host: `{st.results.server.get('sponsor')} ({st.results.server.get('name')})`"
+        )
+    except Exception as e:
+        logger.warning(f"Speedtest error: {e}")
+        return f"❌ Speed test failed: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# 33. Habit Tracker
+# ---------------------------------------------------------------------------
+
+def record_habit_completion(user_id: str, habit_name: str) -> str:
+    """Records daily completion of a habit and calculates streak."""
+    # Ensure habit exists
+    habits = db.get_habits(user_id)
+    if not any(h["habit_name"].lower() == habit_name.lower() for h in habits):
+        db.add_habit(user_id, habit_name)
+
+    res = db.log_habit_done(user_id, habit_name)
+    if res.get("already_done"):
+        return f"🔥 **Habit '{habit_name}' already checked off for today!** Current streak: **{res['habit']['current_streak']} days**."
+
+    return f"🎉 **Habit Completed: '{habit_name}'!**\n• Current Streak: **{res['streak']} days** 🔥\n• Best Streak: **{res['best_streak']} days** 🏆"
+
+
+def list_user_habits(user_id: str) -> str:
+    """Lists all tracked habits with streaks."""
+    habits = db.get_habits(user_id)
+    if not habits:
+        return "🌱 No habits currently being tracked. Start one with `add habit workout`!"
+
+    lines = []
+    for h in habits:
+        lines.append(f"• **{h['habit_name']}** — 🔥 `{h['current_streak']} day streak` (Best: `{h['best_streak']} days`, Last: `{h['last_completed_date'] or 'Never'}`)")
+    return "🌱 **Your Daily Habits:**\n\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 34. Server & System Health Monitor (EC2 Instance)
+# ---------------------------------------------------------------------------
+
+def get_server_system_health() -> str:
+    """Reports CPU, RAM, Disk, Uptime, and Rasa processes on this EC2 instance."""
+    try:
+        cpu_pct = psutil.cpu_percent(interval=0.5)
+        cpu_count = psutil.cpu_count(logical=True)
+        
+        mem = psutil.virtual_memory()
+        mem_used_mb = mem.used / (1024 * 1024)
+        mem_total_mb = mem.total / (1024 * 1024)
+        mem_pct = mem.percent
+
+        disk = psutil.disk_usage('/')
+        disk_used_gb = disk.used / (1024 ** 3)
+        disk_total_gb = disk.total / (1024 ** 3)
+        disk_pct = disk.percent
+
+        boot_time = datetime.fromtimestamp(psutil.boot_time())
+        uptime_str = str(datetime.now() - boot_time).split('.')[0]
+
+        # Check Rasa processes
+        rasa_procs = []
+        for p in psutil.process_iter(['pid', 'name', 'cmdline', 'memory_info']):
+            try:
+                cmd = " ".join(p.info['cmdline'] or [])
+                if "rasa run" in cmd:
+                    rss_mb = p.info['memory_info'].rss / (1024 * 1024)
+                    rasa_procs.append(f"PID {p.info['pid']} ({rss_mb:.1f} MB RAM)")
+            except Exception:
+                pass
+
+        return (
+            f"🖥️ **EC2 Server Health & Diagnostics:**\n\n"
+            f"• ⚙️ **CPU Usage:** `{cpu_pct}%` ({cpu_count} vCPUs)\n"
+            f"• 🧠 **RAM Memory:** `{mem_used_mb:,.0f} MB / {mem_total_mb:,.0f} MB` (**{mem_pct}%**)\n"
+            f"• 💾 **Disk Storage (/):** `{disk_used_gb:.1f} GB / {disk_total_gb:.1f} GB` (**{disk_pct}%**)\n"
+            f"• ⏱️ **System Uptime:** `{uptime_str}` (Booted: {boot_time.strftime('%Y-%m-%d %H:%M')})\n"
+            f"• 🤖 **Active Rasa Services:** {', '.join(rasa_procs) if rasa_procs else 'Running via systemd'}"
+        )
+    except Exception as e:
+        return f"❌ Failed to fetch system health: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# 35. File Sharing & Storage
+# ---------------------------------------------------------------------------
+
+def list_stored_files(user_id: str) -> str:
+    """Lists files saved by the user."""
+    files = db.get_user_files(user_id)
+    if not files:
+        return "📁 No stored files found in your account."
+
+    lines = []
+    for f in files:
+        lines.append(f"• **[#{f['id']}] {f['file_name']}** (`{f['file_type']}`, {f['file_size']//1024} KB) — Saved `{f['created_at'][:16]}`")
+    return f"📁 **Your Stored Files ({len(files)}):**\n\n" + "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 36. Long-Term Memory (Persistent User Context Across Sessions)
+# ---------------------------------------------------------------------------
+
+def remember_user_fact(user_id: str, key: str, value: str, category: str = "general") -> str:
+    """Saves a permanent fact into long-term memory."""
+    db.save_memory(user_id, key, value, category)
+    return f"🧠 **Got it! I will remember:** `{key}` = **{value}** (Category: `{category}`)"
+
+
+def get_user_memory_context(user_id: str) -> str:
+    """Retrieves all stored facts for user to inject into LLM system prompt."""
+    mems = db.get_all_memories(user_id)
+    if not mems:
+        return ""
+
+    lines = [f"- {m['key']}: {m['value']} ({m['category']})" for m in mems]
+    return "Stored Memories about this user:\n" + "\n".join(lines)
+
+
+def list_user_memories(user_id: str) -> str:
+    """User-facing command to view all stored memories."""
+    mems = db.get_all_memories(user_id)
+    if not mems:
+        return "🧠 I don't have any saved memories about you yet. Tell me facts with `remember that my favorite color is blue`!"
+
+    lines = [f"• **{m['key'].title()}**: {m['value']} (`{m['category']}`)" for m in mems]
+    return "🧠 **Long-Term Memories Saved About You:**\n\n" + "\n".join(lines)
+
+
+def forget_user_fact(user_id: str, key: str) -> str:
+    """Removes a fact from long-term memory."""
+    if db.delete_memory(user_id, key):
+        return f"🗑️ I have forgotten `{key}`."
+    return f"❌ Fact `{key}` was not found in memory."
