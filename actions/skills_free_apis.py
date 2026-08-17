@@ -13,15 +13,18 @@ logger = logging.getLogger(__name__)
 # 6. Weather (OpenWeatherMap, WeatherAPI, wttr.in fallback)
 # ---------------------------------------------------------------------------
 
-def get_weather_data(city: str) -> str:
-    """Fetches real-time weather information for any city/location."""
-    clean_city = city.strip()
+DEFAULT_WEATHER_CITY = "Malda, West Bengal, India"
+
+def get_weather_data(city: Optional[str] = None) -> str:
+    """Fetches real-time weather information for any city/location with default to Malda, WB, India."""
+    target_city = city.strip() if (city and city.strip()) else DEFAULT_WEATHER_CITY
+    clean_city = "Malda,IN" if target_city == DEFAULT_WEATHER_CITY else target_city
     
     # 1. OpenWeatherMap if key is present
     owm_key = os.getenv("OPENWEATHERMAP_API_KEY")
     if owm_key:
         try:
-            url = f"https://api.openweathermap.org/data/2.5/weather?q={clean_city}&units=metric&appid={owm_key}"
+            url = f"https://api.openweathermap.org/data/2.5/weather?q={requests.utils.quote(clean_city)}&units=metric&appid={owm_key}"
             resp = requests.get(url, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
@@ -40,19 +43,19 @@ def get_weather_data(city: str) -> str:
     weatherapi_key = os.getenv("WEATHER_API_KEY")
     if weatherapi_key:
         try:
-            url = f"https://api.weatherapi.com/v1/current.json?key={weatherapi_key}&q={clean_city}&aqi=no"
+            url = f"https://api.weatherapi.com/v1/current.json?key={weatherapi_key}&q={requests.utils.quote(clean_city)}&aqi=no"
             resp = requests.get(url, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 curr = data["current"]
                 loc = data["location"]
-                return f"🌤️ **Weather for {loc['name']}, {loc['country']}:**\n• Condition: {curr['condition']['text']}\n• Temperature: {curr['temp_c']}°C (Feels like {curr['feelslike_c']}°C)\n• Humidity: {curr['humidity']}%\n• Wind: {curr['wind_kph']} km/h"
+                return f"🌤️ **Weather for {loc['name']}, {loc.get('region', '')}, {loc['country']}:**\n• Condition: {curr['condition']['text']}\n• Temperature: {curr['temp_c']}°C (Feels like {curr['feelslike_c']}°C)\n• Humidity: {curr['humidity']}%\n• Wind: {curr['wind_kph']} km/h"
         except Exception as e:
             logger.warning(f"WeatherAPI error: {e}")
 
     # 3. Fallback to wttr.in JSON (Free, No API Key needed)
     try:
-        url = f"https://wttr.in/{clean_city}?format=j1"
+        url = f"https://wttr.in/{requests.utils.quote(clean_city)}?format=j1"
         headers = {"User-Agent": "curl/7.68.0"}
         resp = requests.get(url, headers=headers, timeout=8)
         if resp.status_code == 200:
@@ -69,23 +72,23 @@ def get_weather_data(city: str) -> str:
     except Exception as e:
         logger.warning(f"wttr.in error: {e}")
 
-    return f"❌ Could not retrieve weather data for '{city}'. Please check the city name."
+    return f"❌ Could not retrieve weather data for '{target_city}'. Please check the city name."
 
 
 # ---------------------------------------------------------------------------
-# 7. News Digest (NewsAPI, GNews, DuckDuckGo News)
+# 7. News Digest (NewsAPI, GNews, DuckDuckGo News) - Always in English
 # ---------------------------------------------------------------------------
 
 def get_news_digest(topic: Optional[str] = None, country: str = "in", max_items: int = 4) -> str:
-    """Fetches top news headlines or topic-specific news."""
-    # 1. NewsAPI if key is available
+    """Fetches top news headlines or topic-specific news strictly in English language."""
+    # 1. NewsAPI if key is available (enforce language=en)
     news_key = os.getenv("NEWSAPI_KEY")
     if news_key:
         try:
             if topic:
-                url = f"https://newsapi.org/v2/everything?q={topic}&sortBy=publishedAt&pageSize={max_items}&apiKey={news_key}"
+                url = f"https://newsapi.org/v2/everything?q={requests.utils.quote(topic)}&language=en&sortBy=publishedAt&pageSize={max_items}&apiKey={news_key}"
             else:
-                url = f"https://newsapi.org/v2/top-headlines?country={country}&pageSize={max_items}&apiKey={news_key}"
+                url = f"https://newsapi.org/v2/top-headlines?country={country}&language=en&pageSize={max_items}&apiKey={news_key}"
             resp = requests.get(url, timeout=8)
             if resp.status_code == 200:
                 articles = resp.json().get("articles", [])
@@ -96,38 +99,39 @@ def get_news_digest(topic: Optional[str] = None, country: str = "in", max_items:
                         title = a.get("title", "")
                         url_link = a.get("url", "#")
                         lines.append(f"📰 [{title}]({url_link})\n   _Source: {src}_")
-                    return f"🗞️ **Top News Digest ({topic or country.upper()}):**\n\n" + "\n\n".join(lines)
+                    return f"🗞️ **Top News Digest ({topic or country.upper()} - English):**\n\n" + "\n\n".join(lines)
         except Exception as e:
             logger.warning(f"NewsAPI error: {e}")
 
-    # 2. GNews API if key is available
+    # 2. GNews API if key is available (enforce lang=en)
     gnews_key = os.getenv("GNEWS_API_KEY")
     if gnews_key:
         try:
-            q_param = f"q={topic}" if topic else "category=general"
-            url = f"https://gnews.io/api/v4/top-headlines?{q_param}&country={country}&max={max_items}&apikey={gnews_key}"
+            q_param = f"q={requests.utils.quote(topic)}" if topic else "category=general"
+            url = f"https://gnews.io/api/v4/top-headlines?{q_param}&country={country}&lang=en&max={max_items}&apikey={gnews_key}"
             resp = requests.get(url, timeout=8)
             if resp.status_code == 200:
                 articles = resp.json().get("articles", [])
                 if articles:
                     lines = [f"📰 [{a.get('title')}]({a.get('url')})\n   _{a.get('description')}_" for a in articles]
-                    return f"🗞️ **News Headlines:**\n\n" + "\n\n".join(lines)
+                    return f"🗞️ **News Headlines (English):**\n\n" + "\n\n".join(lines)
         except Exception as e:
             logger.warning(f"GNews error: {e}")
 
-    # 3. DuckDuckGo / DDGS News Fallback (Free, zero key)
+    # 3. DuckDuckGo / DDGS News Fallback (Free, zero key, English)
     try:
         try:
             from ddgs import DDGS
         except ImportError:
             from duckduckgo_search import DDGS
         with DDGS() as ddgs:
-            results = list(ddgs.news(topic or "world news top headlines", max_results=max_items))
+            news_query = f"{topic} news english" if topic else "world news top headlines english"
+            results = list(ddgs.news(news_query, max_results=max_items))
             if results:
                 lines = []
                 for r in results:
                     lines.append(f"📰 [{r.get('title')}]({r.get('url')})\n   _{r.get('source', 'News')}: {r.get('body', '')[:120]}..._")
-                return f"🗞️ **Latest News ({topic or 'Top Headlines'}):**\n\n" + "\n\n".join(lines)
+                return f"🗞️ **Latest News ({topic or 'Top Headlines'} - English):**\n\n" + "\n\n".join(lines)
     except Exception as e:
         logger.warning(f"DDG news error: {e}")
 
@@ -182,11 +186,84 @@ def get_currency_conversion(amount: float, from_curr: str, to_curr: str) -> str:
 # 9. Crypto & Blockchain Prices (CoinGecko & Etherscan)
 # ---------------------------------------------------------------------------
 
-def get_crypto_price(coins: str = "bitcoin,ethereum,solana,dogecoin") -> str:
-    """Fetches real-time cryptocurrency prices from CoinGecko."""
+CRYPTO_SYMBOL_MAP = {
+    "btc": "bitcoin",
+    "eth": "ethereum",
+    "ltc": "litecoin",
+    "sol": "solana",
+    "doge": "dogecoin",
+    "bnb": "binancecoin",
+    "xrp": "ripple",
+    "ada": "cardano",
+    "matic": "matic-network",
+    "pol": "polygon-ecosystem-token",
+    "trx": "tron",
+    "dot": "polkadot",
+    "avax": "avalanche-2",
+    "shib": "shiba-inu",
+    "link": "chainlink",
+    "ton": "the-open-network",
+    "near": "near",
+    "apt": "aptos",
+    "sui": "sui",
+    "arb": "arbitrum",
+    "op": "optimism",
+    "pepe": "pepe",
+    "uni": "uniswap",
+    "bch": "bitcoin-cash",
+    "xlm": "stellar",
+    "atom": "cosmos",
+    "xmr": "monero",
+    "etc": "ethereum-classic",
+    "fil": "filecoin",
+    "vet": "vechain",
+    "icp": "internet-computer",
+    "kas": "kaspa",
+    "fet": "fetch-ai",
+    "render": "render-token",
+    "rndr": "render-token",
+    "inj": "injective-protocol",
+    "injective": "injective-protocol",
+    "usdt": "tether",
+    "usdc": "usd-coin",
+    "dai": "dai",
+}
+
+def resolve_crypto_coin_id(token: str) -> str:
+    """Resolves ticker symbol (e.g. 'ltc', 'btc') to official CoinGecko coin ID."""
+    clean = token.strip().lower()
+    if clean in CRYPTO_SYMBOL_MAP:
+        return CRYPTO_SYMBOL_MAP[clean]
+
+    # Dynamic search on CoinGecko if not in predefined map
     try:
-        coin_ids = ",".join([c.strip().lower() for c in coins.split(",")])
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_ids}&vs_currencies=usd,inr&include_24hr_change=true"
+        url = f"https://api.coingecko.com/api/v3/search?query={requests.utils.quote(clean)}"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            coins = resp.json().get("coins", [])
+            for c in coins:
+                if c.get("symbol", "").lower() == clean or c.get("id", "").lower() == clean:
+                    return c.get("id")
+            if coins:
+                return coins[0].get("id")
+    except Exception as e:
+        logger.warning(f"CoinGecko search error: {e}")
+
+    return clean
+
+
+def get_crypto_price(coins: str = "bitcoin,ethereum,solana,dogecoin") -> str:
+    """Fetches real-time cryptocurrency prices from CoinGecko with ticker resolution."""
+    raw_tokens = [c.strip() for c in coins.split(",") if c.strip()]
+    if not raw_tokens:
+        raw_tokens = ["bitcoin", "ethereum", "solana", "dogecoin"]
+
+    # Map symbols to CoinGecko IDs
+    resolved_ids = [resolve_crypto_coin_id(t) for t in raw_tokens]
+    coin_ids_query = ",".join(resolved_ids)
+
+    try:
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_ids_query}&vs_currencies=usd,inr&include_24hr_change=true"
         resp = requests.get(url, timeout=8)
         if resp.status_code == 200:
             data = resp.json()
