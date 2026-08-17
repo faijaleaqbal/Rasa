@@ -250,7 +250,38 @@ class SmartTelegramInput(TelegramInput):
             {"command": "pick", "description": "🎯 Random decision / dice / coin"},
             {"command": "pincode", "description": "📮 India Post PIN code lookup"},
             {"command": "ifsc", "description": "🏦 Bank branch & IFSC finder"},
-            {"command": "shorten", "description": "🔗 Shorten long URL"}
+            {"command": "shorten", "description": "🔗 Shorten long URL"},
+            {"command": "stock", "description": "📈 Live Stock quote (NSE/BSE)"},
+            {"command": "gold", "description": "🪙 Live Gold & Silver rates (India)"},
+            {"command": "fuel", "description": "⛽ Daily Petrol & Diesel rates"},
+            {"command": "pnr", "description": "🚆 IRCTC PNR booking status"},
+            {"command": "train", "description": "🚆 Live train status & schedule"},
+            {"command": "flight", "description": "✈️ Live flight tracker & radar"},
+            {"command": "youtube", "description": "🎬 YouTube video AI summary"},
+            {"command": "summarize", "description": "📄 Webpage & article summary"},
+            {"command": "briefing", "description": "🌅 Daily Morning AI Briefing"},
+            {"command": "screenshot", "description": "📸 Live website screenshot"},
+            {"command": "py", "description": "🐍 Python code sandbox runner"},
+            {"command": "sql", "description": "🗄️ SQLite database query explorer"},
+            {"command": "kg", "description": "🧠 Knowledge Graph memory"},
+            {"command": "social", "description": "📱 Social media post extractor"},
+            {"command": "log", "description": "📜 Server logs & debug viewer"},
+            {"command": "resume", "description": "📄 ATS Resume PDF generator"},
+            {"command": "coverletter", "description": "✉️ Job Cover Letter PDF"},
+            {"command": "convert", "description": "🔄 Image & document format converter"},
+            {"command": "speak", "description": "🎙️ AI Voice message reply (Hindi/Eng)"},
+            {"command": "notify", "description": "📲 Push alert to phone lock screen"},
+            {"command": "findmyphone", "description": "🚨 Sound emergency alarm on phone"},
+            {"command": "clip", "description": "📋 Copy text to phone clipboard"},
+            {"command": "whatsapp", "description": "💬 Direct WhatsApp message dispatcher"},
+            {"command": "skills", "description": "🌟 Complete 100+ skills directory"},
+            {"command": "call", "description": "📞 Make outgoing phone call"},
+            {"command": "sms", "description": "💬 Send SMS from phone SIM"},
+            {"command": "readsms", "description": "📩 Read incoming SMS inbox"},
+            {"command": "alarm", "description": "⏰ Set Android system alarm"},
+            {"command": "timer", "description": "⏳ Set Android countdown timer"},
+            {"command": "open", "description": "📱 Launch Android app or open file"},
+            {"command": "callscreen", "description": "🤖 AI Call screening & attendant"}
         ]
         try:
             # 1. Set commands for default scope
@@ -393,12 +424,18 @@ class SmartTelegramInput(TelegramInput):
 
                             text = f"User uploaded document '{doc_name}'.\n{doc_preview}\nCaption: {caption}".strip()
 
-                        # Handle Photos
+                        # Handle Photos with Vision OCR / AI Analysis
                         elif msg.photo:
                             p_obj = msg.photo[-1]
                             p_name = f"photo_{p_obj.file_id[:10]}.jpg"
-                            download_telegram_file(self.access_token, p_obj.file_id, p_name)
-                            text = f"User uploaded a photo. Caption: {msg.caption or 'Please see the attached photo.'}"
+                            saved_img = download_telegram_file(self.access_token, p_obj.file_id, p_name)
+                            caption_text = msg.caption or ""
+                            if saved_img:
+                                from actions import skills_content as content_skills
+                                vision_analysis = content_skills.analyze_image_vision(saved_img, caption_text)
+                                text = f"User uploaded a photo. Visual Analysis:\n{vision_analysis}\nCaption: {caption_text}".strip()
+                            else:
+                                text = f"User uploaded a photo. Caption: {caption_text or 'Please see the attached photo.'}"
 
                         elif self._is_user_message(msg):
                             text = (msg.text or "").replace("/bot", "")

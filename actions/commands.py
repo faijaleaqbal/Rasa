@@ -10,6 +10,12 @@ from . import skills_documents as docs
 from . import skills_free_apis as apis
 from . import skills_utilities as utils
 from . import skills_extended as ext
+from . import skills_indian_markets as markets
+from . import skills_content as content
+from . import skills_developer_tools as dev
+from . import skills_converters_resume as conv
+from . import skills_mobile_device as mob
+from . import skills_android_controller as android
 from . import mcp_client as mcp
 
 logger = logging.getLogger(__name__)
@@ -55,7 +61,13 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/joke` — Random clean joke & inspirational quote\n"
             "• `/math <expression>` — WolframAlpha & SymPy solver\n"
             "• `/science` — NASA Astronomy Picture of the Day\n\n"
-            "**💻 Developer & DevOps Supertools:**\n"
+            "**💻 Developer, DB & MCP Supertools:**\n"
+            "• `/screenshot <url>` — Live high-res website screenshot capture\n"
+            "• `/py <code>` — Python code execution sandbox\n"
+            "• `/sql <query>` — SQLite database query & table inspector\n"
+            "• `/kg <add|list|search>` — Knowledge Graph & relational memory\n"
+            "• `/social <url>` — Twitter/X, Reddit post content extractor\n"
+            "• `/log [service]` — Inspect live server & bot logs\n"
             "• `/dns <domain>` — DNS records (A, MX, NS, TXT) lookup\n"
             "• `/http <url>` — HTTP status, response latency & headers\n"
             "• `/cron <expr>` — Translate cron syntax to plain English\n"
@@ -70,6 +82,19 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/breach <email_or_pwd>` — Data breach check via XposedOrNot & HIBP\n"
             "• `/tempmail` — Generate disposable temporary email inbox\n"
             "• `/checkmail <login> <domain>` — Check OTP & incoming temporary emails\n\n"
+            "**📊 Indian Markets & Wealth:**\n"
+            "• `/stock <ticker>` — Live NSE/BSE & global stock quotes & day trend\n"
+            "• `/nifty` & `/sensex` — Instant Indian index snapshots\n"
+            "• `/gold` & `/silver` — Live 24K/22K 10g Gold & 1kg Silver bullion rates\n"
+            "• `/fuel [city]` — Daily Petrol, Diesel & CNG prices\n\n"
+            "**🚆 Travel & Indian Transit:**\n"
+            "• `/pnr <10-digit PNR>` — IRCTC train booking & confirmation status\n"
+            "• `/train <number_or_name>` — Indian Railways live schedule & NTES route\n"
+            "• `/flight <flight_no>` — Live flight status, airline, and radar\n\n"
+            "**📝 Smart Content & AI Summaries:**\n"
+            "• `/youtube <url>` — YouTube video transcript & executive summary\n"
+            "• `/summarize <url>` — Webpage / article instant markdown summary\n"
+            "• `/briefing` — Consolidated morning briefing (Weather, News, Markets, Planner)\n\n"
             "**💰 Financial & Calculators:**\n"
             "• `/sip <monthly> <rate> <years>` — Mutual Fund SIP wealth compounding calculator\n"
             "• `/emi <loan> <rate> <years>` — Loan EMI, interest & amortization calculator\n"
@@ -102,7 +127,10 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/recipe <dish>` — Cooking ingredients & instructions\n"
             "• `/riddle` — Fun brain teaser riddles\n"
             "• `/pick <opt1, opt2>` — Random decision maker & `/dice`, `/coinflip`\n\n"
-            "**📁 Document Engines & OAuth:**\n"
+            "**📁 Document Engines, Resumes & Formats:**\n"
+            "• `/resume <role_or_skills>` — Professional ATS Resume generator (.pdf)\n"
+            "• `/coverletter <company> <role>` — Formal Job Application Cover Letter (.pdf)\n"
+            "• `/convert <format> <file>` — Convert image/doc format (PNG, JPG, WebP, PDF, TXT, Word)\n"
             "• `/pdf <title>` — Styled PDF document engine\n"
             "• `/excel <title>` — Styled Excel spreadsheet engine\n"
             "• `/doc <title>` — Styled Word (.docx) memo engine\n"
@@ -564,5 +592,188 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
     # 69. /shorten <url>
     elif cmd == "/shorten":
         return {"handled": True, "text": ext.shorten_url(args_str)}
+
+    # 70. /stock <symbol> or /nifty or /sensex
+    elif cmd in ["/stock", "/stocks"]:
+        return {"handled": True, "text": markets.get_stock_quote(args_str)}
+    elif cmd in ["/nifty", "/nifty50"]:
+        return {"handled": True, "text": markets.get_stock_quote("NIFTY")}
+    elif cmd in ["/sensex", "/bse"]:
+        return {"handled": True, "text": markets.get_stock_quote("SENSEX")}
+
+    # 71. /gold or /silver or /metals
+    elif cmd in ["/gold", "/silver", "/metals", "/bullion"]:
+        return {"handled": True, "text": markets.get_gold_silver_rates()}
+
+    # 72. /fuel [city] or /petrol or /diesel
+    elif cmd in ["/fuel", "/petrol", "/diesel"]:
+        return {"handled": True, "text": markets.get_fuel_rates(args_str or "Malda")}
+
+    # 73. /pnr <10-digit PNR>
+    elif cmd == "/pnr":
+        return {"handled": True, "text": markets.get_train_pnr_status(args_str)}
+
+    # 74. /train <train_number_or_name>
+    elif cmd in ["/train", "/railway"]:
+        return {"handled": True, "text": markets.get_train_live_status(args_str)}
+
+    # 75. /flight <flight_code>
+    elif cmd in ["/flight", "/radar"]:
+        return {"handled": True, "text": markets.get_flight_status(args_str)}
+
+    # 76. /youtube <url> or /yt <url>
+    elif cmd in ["/youtube", "/yt"]:
+        return {"handled": True, "text": content.summarize_youtube_video(args_str)}
+
+    # 77. /summarize <url> or /article <url>
+    elif cmd in ["/summarize", "/article", "/webpage"]:
+        return {"handled": True, "text": content.summarize_webpage(args_str)}
+
+    # 78. /briefing or /morning
+    elif cmd in ["/briefing", "/morning"]:
+        return {"handled": True, "text": content.get_daily_briefing(user_id, args_str or "Malda")}
+
+    # 79. /screenshot <url>
+    elif cmd in ["/screenshot", "/webshot", "/capture"]:
+        res_s = dev.capture_website_screenshot(args_str)
+        if res_s.get("success"):
+            return {"handled": True, "text": res_s.get("text", ""), "file_path": res_s.get("file_path"), "file_type": "photo"}
+        return {"handled": True, "text": res_s.get("error", "⚠️ Screenshot failed.")}
+
+    # 80. /py <code> or /python or /run
+    elif cmd in ["/py", "/python", "/run", "/exec"]:
+        return {"handled": True, "text": dev.run_python_code_sandbox(args_str)}
+
+    # 81. /sql <query> or /db
+    elif cmd in ["/sql", "/db", "/database"]:
+        return {"handled": True, "text": dev.query_sqlite_database(args_str, user_id)}
+
+    # 82. /kg <action> [args] or /memory
+    elif cmd in ["/kg", "/knowledge", "/relations"]:
+        parts_k = args_str.split(maxsplit=3)
+        act_k = parts_k[0] if len(parts_k) > 0 else "list"
+        e_k = parts_k[1] if len(parts_k) > 1 else ""
+        r_k = parts_k[2] if len(parts_k) > 2 else ""
+        t_k = parts_k[3] if len(parts_k) > 3 else ""
+        return {"handled": True, "text": dev.manage_knowledge_graph(act_k, e_k, r_k, t_k, user_id)}
+
+    # 83. /social <url> or /tweet
+    elif cmd in ["/social", "/tweet", "/post"]:
+        return {"handled": True, "text": dev.extract_social_media_info(args_str)}
+
+    # 84. /invoice <text_or_ocr>
+    elif cmd in ["/invoice", "/billtoexcel"]:
+        res_i = dev.convert_receipt_to_excel(args_str, user_id)
+        if res_i.get("success"):
+            return {"handled": True, "text": res_i.get("text", ""), "file_path": res_i.get("file_path"), "file_type": "document"}
+        return {"handled": True, "text": res_i.get("text", "⚠️ Invoice conversion completed.")}
+
+    # 85. /log [service] or /logs
+    elif cmd in ["/log", "/logs", "/syslog"]:
+        return {"handled": True, "text": dev.view_server_logs(args_str or "rasa-bot", 15)}
+
+    # 86. /resume <role_or_skills> or /cv
+    elif cmd in ["/resume", "/cv", "/buildresume"]:
+        res_r = conv.generate_resume_pdf(args_str, "Professional Candidate")
+        if res_r.get("success"):
+            return {"handled": True, "text": res_r.get("text", ""), "file_path": res_r.get("file_path"), "file_type": "document"}
+        return {"handled": True, "text": res_r.get("error", "⚠️ Resume generation failed.")}
+
+    # 87. /coverletter <company> <role>
+    elif cmd in ["/coverletter", "/cl"]:
+        res_cl = conv.generate_cover_letter_pdf(args_str, "Professional Candidate")
+        if res_cl.get("success"):
+            return {"handled": True, "text": res_cl.get("text", ""), "file_path": res_cl.get("file_path"), "file_type": "document"}
+        return {"handled": True, "text": res_cl.get("error", "⚠️ Cover letter generation failed.")}
+
+    # 88. /convert <format>
+    elif cmd in ["/convert", "/format"]:
+        parts_c = args_str.split(maxsplit=1)
+        fmt = parts_c[0] if len(parts_c) > 0 else "png"
+        src_path = parts_c[1].strip() if len(parts_c) > 1 else ""
+        if not src_path:
+            return {"handled": True, "text": "Usage: `/convert <target_format> <filepath_or_url>`\nExample: `/convert png /path/to/image.webp` or `/convert pdf /path/to/doc.txt`"}
+        if src_path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+            res_c = conv.convert_image_file(src_path, fmt)
+        else:
+            res_c = conv.convert_document_file(src_path, fmt)
+
+        if res_c.get("success"):
+            return {"handled": True, "text": res_c.get("text", ""), "file_path": res_c.get("file_path"), "file_type": res_c.get("file_type", "document")}
+        return {"handled": True, "text": res_c.get("error", "⚠️ File conversion failed.")}
+
+    # 89. /speak <text> or /tts
+    elif cmd in ["/speak", "/tts", "/voice"]:
+        res_v = mob.generate_voice_speech(args_str, "hi")
+        if res_v.get("success"):
+            return {"handled": True, "text": res_v.get("text", ""), "file_path": res_v.get("file_path"), "file_type": "voice"}
+        return {"handled": True, "text": res_v.get("error", "⚠️ Voice speech failed.")}
+
+    # 90. /notify <title> | <message>
+    elif cmd in ["/notify", "/alert", "/push"]:
+        parts_n = args_str.split("|", maxsplit=1)
+        t_n = parts_n[0].strip() if len(parts_n) > 0 else "Alya Alert"
+        m_n = parts_n[1].strip() if len(parts_n) > 1 else args_str
+        return {"handled": True, "text": mob.send_phone_push_notification(t_n, m_n, "high")}
+
+    # 91. /findmyphone or /ringphone
+    elif cmd in ["/findmyphone", "/ringphone", "/ring"]:
+        return {"handled": True, "text": mob.find_and_ring_phone(user_id)}
+
+    # 92. /clip <text> or /copy
+    elif cmd in ["/clip", "/copy"]:
+        return {"handled": True, "text": mob.sync_clipboard_to_phone(args_str)}
+
+    # 93. /whatsapp <number> <message> or /wa
+    elif cmd in ["/whatsapp", "/wa"]:
+        parts_w = args_str.split(maxsplit=1)
+        p_w = parts_w[0] if len(parts_w) > 0 else ""
+        m_w = parts_w[1] if len(parts_w) > 1 else "Hello from Alya!"
+        return {"handled": True, "text": mob.create_whatsapp_dispatch(p_w, m_w)}
+
+    # 94. /skills or /directory
+    elif cmd in ["/skills", "/directory", "/allskills"]:
+        return {"handled": True, "text": mob.get_full_skills_directory()}
+
+    # 95. /call <number>
+    elif cmd in ["/call", "/dial", "/phonecall"]:
+        return {"handled": True, "text": android.make_phone_call(args_str)}
+
+    # 96. /sms <number> <message>
+    elif cmd in ["/sms", "/sendtext"]:
+        parts_s = args_str.split(maxsplit=1)
+        p_s = parts_s[0] if len(parts_s) > 0 else ""
+        m_s = parts_s[1] if len(parts_s) > 1 else "Hello from Alya!"
+        return {"handled": True, "text": android.send_phone_sms(p_s, m_s)}
+
+    # 97. /readsms [limit]
+    elif cmd in ["/readsms", "/inboxsms"]:
+        try:
+            lim = int(args_str.strip())
+        except Exception:
+            lim = 5
+        return {"handled": True, "text": android.read_recent_phone_sms(lim)}
+
+    # 98. /alarm <time> [label]
+    elif cmd in ["/alarm", "/setalarm"]:
+        parts_a = args_str.split(maxsplit=1)
+        t_a = parts_a[0] if len(parts_a) > 0 else "07:00 AM"
+        l_a = parts_a[1] if len(parts_a) > 1 else "Alya Alarm"
+        return {"handled": True, "text": android.set_phone_alarm(t_a, l_a)}
+
+    # 99. /timer <duration> [label]
+    elif cmd in ["/timer", "/settimer"]:
+        parts_tm = args_str.split(maxsplit=1)
+        d_tm = parts_tm[0] if len(parts_tm) > 0 else "5 minutes"
+        l_tm = parts_tm[1] if len(parts_tm) > 1 else "Timer"
+        return {"handled": True, "text": android.set_phone_timer(d_tm, l_tm)}
+
+    # 100. /open <target>
+    elif cmd in ["/open", "/launch", "/app"]:
+        return {"handled": True, "text": android.open_file_or_app_on_phone(args_str)}
+
+    # 101. /callscreen <caller_statement>
+    elif cmd in ["/callscreen", "/screen", "/voicemail"]:
+        return {"handled": True, "text": android.screen_incoming_call_message("Unknown Caller", args_str)}
 
     return {"handled": False}

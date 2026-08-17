@@ -2,8 +2,10 @@ import os
 import re
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Text
+
+IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 
 from dotenv import load_dotenv
 from rasa_sdk import Action, Tracker
@@ -20,6 +22,13 @@ from . import skills_productivity as prod
 from . import skills_documents as docs
 from . import skills_free_apis as apis
 from . import skills_utilities as utils
+from . import skills_indian_markets as markets
+from . import skills_content as content
+from . import skills_developer_tools as dev
+from . import skills_converters_resume as conv
+from . import skills_mobile_device as mob
+from . import skills_android_controller as android
+from . import security_guardrails as security
 from . import mcp_client as mcp
 
 logger = logging.getLogger(__name__)
@@ -778,12 +787,385 @@ LLM_TOOLS_SPEC = [
                 "required": ["agent_type", "instruction"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stock_quote",
+            "description": "Fetch real-time stock price, gain/loss, and day high/low for NSE, BSE, Nifty, Sensex, or global stocks.",
+            "parameters": {
+                "type": "object",
+                "properties": {"symbol": {"type": "string", "description": "Stock ticker or index (e.g. RELIANCE, TATAMOTORS, TCS, NIFTY, SENSEX, AAPL)"}},
+                "required": ["symbol"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_gold_silver_rates",
+            "description": "Fetch live 24K and 22K Gold (10g) and Silver (1kg) bullion prices in India.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_fuel_rates",
+            "description": "Check daily Petrol, Diesel, and CNG fuel prices for Indian cities.",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string", "description": "City name, e.g. Delhi, Mumbai, Kolkata, Malda"}}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_train_pnr_status",
+            "description": "Check Indian Railways IRCTC 10-digit PNR booking status.",
+            "parameters": {
+                "type": "object",
+                "properties": {"pnr": {"type": "string", "description": "10-digit IRCTC PNR number"}},
+                "required": ["pnr"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_train_live_status",
+            "description": "Look up Indian Railways train route, schedule, and live running status.",
+            "parameters": {
+                "type": "object",
+                "properties": {"train_number_or_name": {"type": "string", "description": "Train number (e.g. 12301) or train name"}},
+                "required": ["train_number_or_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_flight_status",
+            "description": "Track real-time flight route, status, airline, and radar.",
+            "parameters": {
+                "type": "object",
+                "properties": {"flight_code": {"type": "string", "description": "Flight number (e.g. 6E205, AI101)"}},
+                "required": ["flight_code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_youtube_video",
+            "description": "Extract transcript from a YouTube video URL and generate an executive bullet-point summary.",
+            "parameters": {
+                "type": "object",
+                "properties": {"url": {"type": "string", "description": "YouTube video link or ID"}},
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_webpage",
+            "description": "Fetch and summarize the full text of any news article, blog, or webpage URL.",
+            "parameters": {
+                "type": "object",
+                "properties": {"url": {"type": "string", "description": "Webpage or article URL"}},
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_daily_briefing",
+            "description": "Generate a consolidated morning briefing with weather, top news, market snapshot, and user planner.",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string", "description": "City for weather, default Delhi or Malda"}}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "capture_website_screenshot",
+            "description": "Capture high-resolution screenshot image of any website URL.",
+            "parameters": {
+                "type": "object",
+                "properties": {"url": {"type": "string", "description": "Website URL to capture"}},
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_python_code_sandbox",
+            "description": "Execute Python code in an isolated sandbox environment and get stdout output.",
+            "parameters": {
+                "type": "object",
+                "properties": {"code": {"type": "string", "description": "Python code snippet to execute"}},
+                "required": ["code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_sqlite_database",
+            "description": "Execute SQL queries or inspect user database tables (notes, todos, expenses, bills, habits).",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "SQL query or table name to inspect"}},
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_knowledge_graph",
+            "description": "Store or query deep relational memory in the Knowledge Graph (Entity -> Relation -> Target).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "add, search, list, or delete"},
+                    "entity": {"type": "string", "description": "Subject entity"},
+                    "relation": {"type": "string", "description": "Relationship type"},
+                    "target": {"type": "string", "description": "Target entity or value"}
+                },
+                "required": ["action"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "extract_social_media_info",
+            "description": "Extract content, author, and key takeaways from a Twitter/X, Reddit, or LinkedIn post URL.",
+            "parameters": {
+                "type": "object",
+                "properties": {"url": {"type": "string", "description": "Social media post URL"}},
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "view_server_logs",
+            "description": "Check real-time application and system logs for debugging.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service_name": {"type": "string", "description": "rasa-bot, rasa-actions, or nginx"},
+                    "lines": {"type": "integer", "description": "Number of log lines, default 15"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_resume_pdf",
+            "description": "Create a high-impact, professional ATS-friendly Resume and deliver as styled PDF.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "role_or_details": {"type": "string", "description": "Target job title, skills, or professional experience"},
+                    "candidate_name": {"type": "string", "description": "Full name of candidate"}
+                },
+                "required": ["role_or_details"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_cover_letter_pdf",
+            "description": "Generate a tailored formal job application Cover Letter and deliver as styled PDF.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "company_and_role": {"type": "string", "description": "Company name and target job position"},
+                    "candidate_name": {"type": "string", "description": "Candidate full name"}
+                },
+                "required": ["company_and_role"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_voice_speech",
+            "description": "Synthesize a natural AI Voice audio message in Hindi or Indian English and deliver via Telegram.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Message text to speak"},
+                    "voice_lang": {"type": "string", "description": "'hi' for Hindi or 'en' for English"}
+                },
+                "required": ["text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_phone_push_notification",
+            "description": "Send a real-time native push alert to user's Android phone screen with sound and vibration.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Notification title"},
+                    "message": {"type": "string", "description": "Notification body content"},
+                    "priority": {"type": "string", "description": "'urgent', 'high', or 'default'"}
+                },
+                "required": ["title", "message"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_and_ring_phone",
+            "description": "Sound a high-priority loud alarm on user's phone to help locate it.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_whatsapp_dispatch",
+            "description": "Prepare a direct WhatsApp message link and dispatch to mobile phone.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone_number": {"type": "string", "description": "Recipient phone number with country code, e.g. +919876543210"},
+                    "message": {"type": "string", "description": "Message text to send"}
+                },
+                "required": ["phone_number", "message"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_full_skills_directory",
+            "description": "List all 95+ available skills and command triggers in the AI assistant.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "make_phone_call",
+            "description": "Initiate an outgoing phone call on user's Android smartphone.",
+            "parameters": {
+                "type": "object",
+                "properties": {"phone_number": {"type": "string", "description": "Phone number with country code"}},
+                "required": ["phone_number"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_phone_sms",
+            "description": "Send an SMS text message directly from user's Android SIM card.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone_number": {"type": "string", "description": "Recipient phone number"},
+                    "message": {"type": "string", "description": "SMS text content"}
+                },
+                "required": ["phone_number", "message"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_recent_phone_sms",
+            "description": "Read recent incoming SMS text messages from user's Android inbox.",
+            "parameters": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer", "description": "Number of recent SMS to read, default 5"}}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_phone_alarm",
+            "description": "Set a system alarm on user's Android phone clock app.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "time_str": {"type": "string", "description": "Alarm time, e.g. '07:30 AM', '6:00'"},
+                    "label": {"type": "string", "description": "Alarm label/title"}
+                },
+                "required": ["time_str"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_phone_timer",
+            "description": "Set a countdown timer on user's Android phone clock.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "duration_str": {"type": "string", "description": "Duration, e.g. '5 minutes', '30 seconds'"},
+                    "label": {"type": "string", "description": "Timer label"}
+                },
+                "required": ["duration_str"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_file_or_app_on_phone",
+            "description": "Open a local file (PDF, doc) or launch an application on Android phone.",
+            "parameters": {
+                "type": "object",
+                "properties": {"target": {"type": "string", "description": "App name (e.g. WhatsApp, YouTube) or file path"}},
+                "required": ["target"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "screen_incoming_call_message",
+            "description": "Screen and handle missed or incoming phone calls by taking message and generating AI verbal response.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caller_number": {"type": "string", "description": "Phone number of caller"},
+                    "caller_statement": {"type": "string", "description": "What caller said or wanted"}
+                },
+                "required": ["caller_statement"]
+            }
+        }
     }
 ]
 
 
 def execute_tool_call(tool_name: str, args: Dict[str, Any], user_id: str, chat_id: str) -> str:
-    """Dispatches tool call to appropriate skill module."""
+    """Dispatches tool call to appropriate skill module with security guardrail check."""
+    # Check security verification for high-risk actions
+    v_check = security.check_and_request_verification(tool_name, args, user_id)
+    if v_check and v_check.get("needs_verification"):
+        return v_check["text"]
+
     try:
         if tool_name == "web_search":
             return search_the_web(args.get("query", ""))
@@ -900,6 +1282,76 @@ def execute_tool_call(tool_name: str, args: Dict[str, Any], user_id: str, chat_i
             return prod.list_github_prs(args.get("repo", ""), args.get("state", "open"))
         elif tool_name == "mcp_coding_task":
             return mcp.mcp_execute_coding_task(args.get("agent_type", "antigravity"), args.get("instruction", ""), args.get("context"))
+        elif tool_name == "get_stock_quote":
+            return markets.get_stock_quote(args.get("symbol", "RELIANCE"))
+        elif tool_name == "get_gold_silver_rates":
+            return markets.get_gold_silver_rates()
+        elif tool_name == "get_fuel_rates":
+            return markets.get_fuel_rates(args.get("city", "Delhi"))
+        elif tool_name == "get_train_pnr_status":
+            return markets.get_train_pnr_status(args.get("pnr", ""))
+        elif tool_name == "get_train_live_status":
+            return markets.get_train_live_status(args.get("train_number_or_name", ""))
+        elif tool_name == "get_flight_status":
+            return markets.get_flight_status(args.get("flight_code", ""))
+        elif tool_name == "summarize_youtube_video":
+            return content.summarize_youtube_video(args.get("url", ""))
+        elif tool_name == "summarize_webpage":
+            return content.summarize_webpage(args.get("url", ""))
+        elif tool_name == "get_daily_briefing":
+            return content.get_daily_briefing(user_id, args.get("city", "Malda"))
+        elif tool_name == "capture_website_screenshot":
+            res = dev.capture_website_screenshot(args.get("url", ""))
+            if res.get("file_path") and chat_id:
+                docs.send_telegram_file(chat_id, res["file_path"], caption=res.get("text", "📸 Website Screenshot"), file_type="photo")
+            return res.get("text") or res.get("error", "Screenshot processed.")
+        elif tool_name == "run_python_code_sandbox":
+            return dev.run_python_code_sandbox(args.get("code", ""))
+        elif tool_name == "query_sqlite_database":
+            return dev.query_sqlite_database(args.get("query", ""), user_id)
+        elif tool_name == "manage_knowledge_graph":
+            return dev.manage_knowledge_graph(args.get("action", "list"), args.get("entity", ""), args.get("relation", ""), args.get("target", ""), user_id)
+        elif tool_name == "extract_social_media_info":
+            return dev.extract_social_media_info(args.get("url", ""))
+        elif tool_name == "view_server_logs":
+            return dev.view_server_logs(args.get("service_name", "rasa-bot"), int(args.get("lines", 15)))
+        elif tool_name == "generate_resume_pdf":
+            res = conv.generate_resume_pdf(args.get("role_or_details", ""), args.get("candidate_name", "Candidate"))
+            if res.get("file_path") and chat_id:
+                docs.send_telegram_file(chat_id, res["file_path"], caption=res.get("text", "📄 Resume PDF"), file_type="document")
+            return res.get("text", "Resume generated.")
+        elif tool_name == "generate_cover_letter_pdf":
+            res = conv.generate_cover_letter_pdf(args.get("company_and_role", ""), args.get("candidate_name", "Candidate"))
+            if res.get("file_path") and chat_id:
+                docs.send_telegram_file(chat_id, res["file_path"], caption=res.get("text", "✉️ Cover Letter PDF"), file_type="document")
+            return res.get("text", "Cover letter generated.")
+        elif tool_name == "generate_voice_speech":
+            res_v = mob.generate_voice_speech(args.get("text", ""), args.get("voice_lang", "hi"))
+            if res_v.get("file_path") and chat_id:
+                docs.send_telegram_file(chat_id, res_v["file_path"], caption=res_v.get("text", "🎙️ Voice Message"), file_type="voice")
+            return res_v.get("text", "Voice generated.")
+        elif tool_name == "send_phone_push_notification":
+            return mob.send_phone_push_notification(args.get("title", "Alya Alert"), args.get("message", ""), args.get("priority", "high"))
+        elif tool_name == "find_and_ring_phone":
+            return mob.find_and_ring_phone(user_id)
+        elif tool_name == "create_whatsapp_dispatch":
+            return mob.create_whatsapp_dispatch(args.get("phone_number", ""), args.get("message", ""))
+        elif tool_name == "get_full_skills_directory":
+            return mob.get_full_skills_directory()
+        elif tool_name == "make_phone_call":
+            return android.make_phone_call(args.get("phone_number", ""))
+        elif tool_name == "send_phone_sms":
+            return android.send_phone_sms(args.get("phone_number", ""), args.get("message", ""))
+        elif tool_name == "read_recent_phone_sms":
+            return android.read_recent_phone_sms(int(args.get("limit", 5)))
+        elif tool_name == "set_phone_alarm":
+            return android.set_phone_alarm(args.get("time_str", "07:00 AM"), args.get("label", "Alya Alarm"))
+        elif tool_name == "set_phone_timer":
+            return android.set_phone_timer(args.get("duration_str", "5 minutes"), args.get("label", "Timer"))
+        elif tool_name == "open_file_or_app_on_phone":
+            return android.open_file_or_app_on_phone(args.get("target", "WhatsApp"))
+        elif tool_name == "screen_incoming_call_message":
+            return android.screen_incoming_call_message(args.get("caller_number", "Unknown"), args.get("caller_statement", ""))
 
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
@@ -929,6 +1381,27 @@ class ActionLLMResponse(Action):
         user_id = sender_id
 
         logger.info(f"action_llm_response triggered for user {user_id} message: {user_message}")
+
+        # 0. Check if user is confirming or canceling a pending high-risk action
+        was_v, verified_action, v_msg = security.handle_user_verification_response(user_message, user_id)
+        if was_v:
+            if verified_action:
+                act = verified_action["action"]
+                par = verified_action["params"]
+                if act == "make_phone_call":
+                    res_exec = android.make_phone_call(par.get("phone_number") or par.get("phone", ""))
+                elif act == "send_phone_sms":
+                    res_exec = android.send_phone_sms(par.get("phone_number") or par.get("phone", ""), par.get("message", ""))
+                elif act == "execute_sql_query":
+                    res_exec = dev.execute_sqlite_query(par.get("query", ""))
+                elif act == "run_python_sandbox":
+                    res_exec = dev.run_python_sandbox_code(par.get("code", ""))
+                else:
+                    res_exec = f"✅ Executed {act} successfully."
+                dispatcher.utter_message(text=f"{v_msg}\n\n{res_exec}")
+            else:
+                dispatcher.utter_message(text=v_msg)
+            return []
 
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key or groq_api_key.startswith("your_"):
@@ -961,7 +1434,7 @@ class ActionLLMResponse(Action):
         else:
             past_dialogue = history_messages[-6:]
 
-        current_date_str = datetime.now(timezone.utc).strftime("%A, %B %d, %Y (%I:%M %p UTC)")
+        current_date_str = datetime.now(IST).strftime("%A, %B %d, %Y (%I:%M %p IST)")
 
         memory_prompt_block = f"\n\n[Persistent User Memories & Preferences]:\n{user_memory_context}" if user_memory_context else ""
 

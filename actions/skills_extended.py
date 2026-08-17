@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 load_dotenv("/home/ubuntu/Rasa/.env")
 logger = logging.getLogger(__name__)
 
+IST = timezone(timedelta(hours=5, minutes=30), name="IST")
+
 def _clean_llm_think(text: str) -> str:
     """Strips <think> tags and reasoning blocks from LLM responses."""
     if "</think>" in text:
@@ -500,11 +502,11 @@ def get_world_time(city: str) -> str:
         key = os.getenv("GROQ_API_KEY")
         if key:
             client = Groq(api_key=key)
-            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            now_ist = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST")
             resp = client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
                 messages=[
-                    {"role": "system", "content": f"Current reference time is {now_utc}. Calculate the current local time, timezone, and difference with Indian Standard Time (IST UTC+5:30) for the specified city. Return concise bullet points without thinking process."},
+                    {"role": "system", "content": f"Current reference time is {now_ist}. Calculate the current local time, timezone, and difference with Indian Standard Time (IST UTC+5:30) for the specified city. Return concise bullet points without thinking process."},
                     {"role": "user", "content": f"What is the current time in {clean}?"}
                 ],
                 temperature=0.1,
@@ -515,7 +517,7 @@ def get_world_time(city: str) -> str:
     except Exception as e:
         logger.warning(f"World time error: {e}")
 
-    return f"🕒 Current UTC Time: `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}`"
+    return f"🕒 Current IST Time: `{datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}`"
 
 
 def calculate_countdown(target_date_str: str) -> str:

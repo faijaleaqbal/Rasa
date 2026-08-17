@@ -8,10 +8,9 @@ from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
 
 load_dotenv("/home/ubuntu/Rasa/.env")
-
 logger = logging.getLogger(__name__)
 
-# MCP Server Endpoints / Configurations from .env
+# MCP Server Endpoints / Configurations
 GITHUB_MCP_URL = os.getenv("GITHUB_MCP_SERVER_URL", "http://127.0.0.1:4097")
 OPENCODE_MCP_URL = os.getenv("OPENCODE_MCP_SERVER_URL", "http://127.0.0.1:4096")
 OPENCODE_PASSWORD = os.getenv("OPENCODE_SERVER_PASSWORD", "Faijal@1626")
@@ -20,15 +19,51 @@ OPENCODE_PASSWORD = os.getenv("OPENCODE_SERVER_PASSWORD", "Faijal@1626")
 def call_mcp_server(server_type: str, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Sends a JSON-RPC 2.0 request to the specified MCP server with proper authentication.
-    Supported server types: 'github', 'opencode'.
+    Supported server types: 'github', 'opencode', 'sqlite', 'filesystem', 'puppeteer', 'memory'.
     """
+    server_key = server_type.lower().strip()
+    
+    # 1. SQLite Database MCP
+    if server_key in ["sqlite", "database", "db"]:
+        from . import skills_developer_tools as dev
+        q = params.get("query", "")
+        uid = params.get("user_id", "default")
+        res_text = dev.query_sqlite_database(q, uid)
+        return {"result": {"content": [{"type": "text", "text": res_text}]}}
+
+    # 2. Puppeteer / Web Screenshot MCP
+    elif server_key in ["puppeteer", "browser", "screenshot"]:
+        from . import skills_developer_tools as dev
+        url = params.get("url", "")
+        res_dict = dev.capture_website_screenshot(url)
+        return {"result": res_dict}
+
+    # 3. Knowledge Graph Memory MCP
+    elif server_key in ["memory", "knowledge_graph", "kg"]:
+        from . import skills_developer_tools as dev
+        act = params.get("action", "list")
+        entity = params.get("entity", "")
+        rel = params.get("relation", "")
+        target = params.get("target", "")
+        uid = params.get("user_id", "default")
+        res_text = dev.manage_knowledge_graph(act, entity, rel, target, uid)
+        return {"result": {"content": [{"type": "text", "text": res_text}]}}
+
+    # 4. Filesystem & Server Logs MCP
+    elif server_key in ["filesystem", "files", "logs"]:
+        from . import skills_developer_tools as dev
+        svc = params.get("service", "rasa-bot")
+        lines = params.get("lines", 20)
+        res_text = dev.view_server_logs(svc, lines)
+        return {"result": {"content": [{"type": "text", "text": res_text}]}}
+
+    # 5. Remote HTTP MCP Servers (OpenCode, GitHub)
     server_urls = {
-        "github": os.getenv("GITHUB_MCP_SERVER_URL", "http://127.0.0.1:4097"),
-        "opencode": os.getenv("OPENCODE_MCP_SERVER_URL", "http://127.0.0.1:4096")
+        "github": GITHUB_MCP_URL,
+        "opencode": OPENCODE_MCP_URL
     }
 
-    url = server_urls.get(server_type.lower())
-
+    url = server_urls.get(server_key)
     if url:
         try:
             payload = {
@@ -37,10 +72,8 @@ def call_mcp_server(server_type: str, method: str, params: Dict[str, Any]) -> Di
                 "method": method,
                 "params": params
             }
-            
-            # Use HTTP Basic Auth for OpenCode server
             auth = None
-            if server_type.lower() == "opencode":
+            if server_key == "opencode":
                 pwd = os.getenv("OPENCODE_SERVER_PASSWORD", "Faijal@1626")
                 auth = HTTPBasicAuth("opencode", pwd)
 
@@ -54,12 +87,6 @@ def call_mcp_server(server_type: str, method: str, params: Dict[str, Any]) -> Di
         except Exception as e:
             logger.warning(f"Error contacting remote MCP server {server_type}: {e}")
 
-    # Fallback to local execution / tool delegation
-    if server_type.lower() == "github":
-        return {"result": f"GitHub MCP: Tool '{method}' dispatched."}
-    elif server_type.lower() == "opencode":
-        return {"result": f"OpenCode MCP: Code analysis tool '{method}' executed."}
-
     return {"error": f"Unknown or unconfigured MCP server: {server_type}"}
 
 
@@ -69,8 +96,7 @@ def mcp_execute_coding_task(agent_type: str, instruction: str, context: Optional
     clean_task = instruction.strip()
     
     # 1. OpenCode Coding Delegation
-    if "opencode" in server_key or "code" in server_key:
-        # Check if opencode server is live with auth
+    if "opencode" in server_key or "code" in server_key or "antigravity" in server_key:
         pwd = os.getenv("OPENCODE_SERVER_PASSWORD", "Faijal@1626")
         url = os.getenv("OPENCODE_MCP_SERVER_URL", "http://127.0.0.1:4096")
         
