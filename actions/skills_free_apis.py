@@ -21,7 +21,8 @@ DEFAULT_WEATHER_CITY = "Malda, West Bengal, India"
 def get_weather_data(city: Optional[str] = None) -> str:
     """Fetches real-time weather information for any city/location with default to Malda, WB, India."""
     target_city = city.strip() if (city and city.strip()) else DEFAULT_WEATHER_CITY
-    clean_city = "Malda,IN" if target_city == DEFAULT_WEATHER_CITY else target_city
+    is_default = (target_city == DEFAULT_WEATHER_CITY or target_city.lower() in ["malda", "malda, in", "malda, west bengal"])
+    clean_city = "Malda,IN" if is_default else target_city
     
     # 1. OpenWeatherMap if key is present
     owm_key = os.getenv("OPENWEATHERMAP_API_KEY")
@@ -36,9 +37,10 @@ def get_weather_data(city: Optional[str] = None) -> str:
                 humidity = data["main"]["humidity"]
                 desc = data["weather"][0]["description"].title()
                 wind = data["wind"]["speed"]
-                name = data["name"]
+                raw_name = data.get("name", "")
                 country = data["sys"].get("country", "")
-                return f"🌤️ **Weather for {name}, {country}:**\n• Condition: {desc}\n• Temperature: {temp}°C (Feels like {feels}°C)\n• Humidity: {humidity}%\n• Wind Speed: {wind} m/s"
+                loc_title = "Malda, West Bengal, IN" if (is_default or raw_name in ["English Bazar", "Malda"]) else f"{raw_name}, {country}"
+                return f"🌤️ **Weather for {loc_title}:**\n• Condition: {desc}\n• Temperature: {temp}°C (Feels like {feels}°C)\n• Humidity: {humidity}%\n• Wind Speed: {wind} m/s"
         except Exception as e:
             logger.warning(f"OpenWeatherMap error: {e}")
 
@@ -52,7 +54,8 @@ def get_weather_data(city: Optional[str] = None) -> str:
                 data = resp.json()
                 curr = data["current"]
                 loc = data["location"]
-                return f"🌤️ **Weather for {loc['name']}, {loc.get('region', '')}, {loc['country']}:**\n• Condition: {curr['condition']['text']}\n• Temperature: {curr['temp_c']}°C (Feels like {curr['feelslike_c']}°C)\n• Humidity: {curr['humidity']}%\n• Wind: {curr['wind_kph']} km/h"
+                loc_title = "Malda, West Bengal, IN" if (is_default or loc["name"] in ["English Bazar", "Malda"]) else f"{loc['name']}, {loc.get('region', '')}, {loc['country']}"
+                return f"🌤️ **Weather for {loc_title}:**\n• Condition: {curr['condition']['text']}\n• Temperature: {curr['temp_c']}°C (Feels like {curr['feelslike_c']}°C)\n• Humidity: {curr['humidity']}%\n• Wind: {curr['wind_kph']} km/h"
         except Exception as e:
             logger.warning(f"WeatherAPI error: {e}")
 

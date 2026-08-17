@@ -788,7 +788,7 @@ def execute_tool_call(tool_name: str, args: Dict[str, Any], user_id: str, chat_i
         if tool_name == "web_search":
             return search_the_web(args.get("query", ""))
         elif tool_name == "get_weather":
-            return apis.get_weather_data(args.get("city", "Delhi"))
+            return apis.get_weather_data(args.get("city", "Malda, West Bengal, India"))
         elif tool_name == "get_news":
             return apis.get_news_digest(args.get("topic"), args.get("country", "in"))
         elif tool_name == "convert_currency":
@@ -1077,9 +1077,9 @@ class ActionGetWeather(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         user_text = tracker.latest_message.get("text", "")
-        # Extract city or default
-        words = user_text.split()
-        city = words[-1] if len(words) > 1 and words[-1].isalpha() else "Delhi"
+        # Strip slash command if present and extract requested city or fallback to default
+        clean_text = user_text.replace("/weather", "").strip()
+        city = clean_text if clean_text else "Malda, West Bengal, India"
         res = apis.get_weather_data(city)
         dispatcher.utter_message(text=res)
         return []
