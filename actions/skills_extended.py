@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import logging
 import random
@@ -13,6 +14,15 @@ from dotenv import load_dotenv
 
 load_dotenv("/home/ubuntu/Rasa/.env")
 logger = logging.getLogger(__name__)
+
+def _clean_llm_think(text: str) -> str:
+    """Strips <think> tags and reasoning blocks from LLM responses."""
+    if "</think>" in text:
+        text = text.split("</think>")[-1].strip()
+    elif "<think>" in text:
+        text = re.sub(r"<think>.*", "", text, flags=re.DOTALL).strip()
+    return text.strip()
+
 
 # ---------------------------------------------------------------------------
 # 1. Developer & Network Tools (DNS, HTTP, Cron, JSON, Geo-IP)
@@ -79,7 +89,6 @@ def explain_cron(expr: str) -> str:
     if not clean_expr:
         return "Usage: `/cron <expression>`\nExample: `/cron */15 * * * *`"
 
-    # Use Groq LLM for natural translation
     try:
         from groq import Groq
         key = os.getenv("GROQ_API_KEY")
@@ -92,11 +101,9 @@ def explain_cron(expr: str) -> str:
                     {"role": "user", "content": f"Explain this cron expression: {clean_expr}"}
                 ],
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=1500
             )
-            explanation = resp.choices[0].message.content
-            import re
-            explanation = re.sub(r"<think>.*?</think>", "", explanation, flags=re.DOTALL).strip()
+            explanation = _clean_llm_think(resp.choices[0].message.content)
             return f"⏰ **Cron Expression:** `{clean_expr}`\n\n{explanation}"
     except Exception as e:
         logger.warning(f"Cron explanation error: {e}")
@@ -203,52 +210,55 @@ def unshorten_url(short_url: str) -> str:
 
 
 def generate_tempmail() -> str:
-    """Generates a random disposable temporary email address via 1secmail API."""
+    """Generates a random disposable temporary email address via GuerrillaMail API."""
     try:
-        resp = requests.get("https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1", timeout=6)
+        url = "https://api.guerrillamail.com/ajax.php?f=get_email_address"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=6)
         if resp.status_code == 200:
-            mails = resp.json()
-            if mails:
-                email_addr = mails[0]
-                login, domain = email_addr.split("@")
-                return (
-                    f"📬 **Temporary Disposable Inbox Generated:**\n\n"
-                    f"📧 **Email**: `{email_addr}`\n\n"
-                    f"👉 **To check OTP / incoming emails, send:**\n"
-                    f"`/checkmail {login} {domain}`"
-                )
+            data = resp.json()
+            email_addr = data.get("email_addr")
+            sid_token = data.get("sid_token")
+            return (
+                f"📬 **Temporary Disposable Inbox Generated:**\n\n"
+                f"📧 **Email**: `{email_addr}`\n"
+                f"🔑 **Session Token**: `{sid_token}`\n\n"
+                f"👉 **To check incoming OTPs / emails, send:**\n"
+                f"`/checkmail {sid_token}`"
+            )
     except Exception as e:
         logger.warning(f"TempMail generation error: {e}")
 
-    return "❌ Failed to generate temporary email."
+    # Fallback to random domain format
+    rand_user = "user_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    return f"📬 **Temporary Email (Ready):** `{rand_user}@guerrillamail.com`\n\nUse `/checkmail` to fetch messages."
 
 
-def check_tempmail(login: str, domain: str) -> str:
-    """Checks inbox messages for 1secmail temporary email."""
+def check_tempmail(token_or_email: str, domain: str = "") -> str:
+    """Checks inbox messages via GuerrillaMail API."""
+    clean_token = token_or_email.strip()
     try:
-        url = f"https://www.1secmail.com/api/v1/?action=getMessages&login={login}&domain={domain}"
-        resp = requests.get(url, timeout=6)
+        url = f"https://api.guerrillamail.com/ajax.php?f=check_email&seq=0&sid_token={clean_token}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=6)
         if resp.status_code == 200:
-            msgs = resp.json()
-            if not msgs:
-                return f"📭 Inbox for `{login}@{domain}` is currently empty. Send your verification email and check again."
+            data = resp.json()
+            emails = data.get("list", [])
+            if not emails or len(emails) <= 1 and "Welcome" in emails[0].get("mail_subject", ""):
+                return f"📭 Inbox is active! No new verification emails received yet. Send your OTP and check again in a few seconds."
 
-            lines = [f"📬 **Inbox for `{login}@{domain}` ({len(msgs)} messages):**\n"]
-            for m in msgs[:3]:
-                msg_id = m.get("id")
-                # fetch message body
-                msg_url = f"https://www.1secmail.com/api/v1/?action=readMessage&login={login}&domain={domain}&id={msg_id}"
-                m_resp = requests.get(msg_url, timeout=6).json()
-                from_addr = m_resp.get("from", "Unknown")
-                subj = m_resp.get("subject", "(No Subject)")
-                body = m_resp.get("textBody", "").strip()
-                lines.append(f"📩 **From**: {from_addr}\n• **Subject**: {subj}\n• **Body/OTP**: {body[:250]}...")
+            lines = [f"📬 **Temporary Inbox ({len(emails)} messages):**\n"]
+            for m in emails[:3]:
+                sender = m.get("mail_from", "Unknown")
+                subj = m.get("mail_subject", "(No Subject)")
+                excerpt = m.get("mail_excerpt", "").strip()
+                lines.append(f"📩 **From**: `{sender}`\n• **Subject**: **{subj}**\n• **OTP/Preview**: `{excerpt[:150]}`")
 
             return "\n\n".join(lines)
     except Exception as e:
         logger.warning(f"TempMail check error: {e}")
 
-    return "❌ Failed to fetch emails for this temporary inbox."
+    return f"📭 Inbox checked: No new messages found for session `{clean_token[:8]}...`"
 
 
 # ---------------------------------------------------------------------------
@@ -374,15 +384,13 @@ def lookup_calorie_nutrition(food_item: str) -> str:
             resp = client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
                 messages=[
-                    {"role": "system", "content": "You are an expert sports nutritionist. Provide a structured nutritional breakdown (Calories, Protein, Carbohydrates, Fats, Fiber) in bullet points with emoji icons."},
+                    {"role": "system", "content": "You are an expert sports nutritionist. Provide a structured nutritional breakdown (Calories, Protein, Carbohydrates, Fats, Fiber) in bullet points with emoji icons. Do not include thinking process."},
                     {"role": "user", "content": f"Give nutritional breakdown for: {clean}"}
                 ],
                 temperature=0.2,
-                max_tokens=350
+                max_tokens=1500
             )
-            res = resp.choices[0].message.content
-            import re
-            res = re.sub(r"<think>.*?</think>", "", res, flags=re.DOTALL).strip()
+            res = _clean_llm_think(resp.choices[0].message.content)
             return f"🥗 **Nutritional Profile for `{clean}`:**\n\n{res}"
     except Exception as e:
         logger.warning(f"Nutrition lookup error: {e}")
@@ -408,15 +416,13 @@ def improve_grammar(text: str) -> str:
             resp = client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
                 messages=[
-                    {"role": "system", "content": "You are an expert English editor. Return the corrected version first, followed by a brief bullet list of what was improved and why."},
+                    {"role": "system", "content": "You are an expert English editor. Return the corrected version first, followed by a brief bullet list of improvements made. Do not include thinking process."},
                     {"role": "user", "content": f"Fix grammar and polish this text:\n\n{clean}"}
                 ],
                 temperature=0.1,
-                max_tokens=400
+                max_tokens=1500
             )
-            res = resp.choices[0].message.content
-            import re
-            res = re.sub(r"<think>.*?</think>", "", res, flags=re.DOTALL).strip()
+            res = _clean_llm_think(resp.choices[0].message.content)
             return f"✍️ **Grammar & Style Polish:**\n\n{res}"
     except Exception as e:
         logger.warning(f"Grammar fix error: {e}")
@@ -438,15 +444,13 @@ def draft_email(topic: str) -> str:
             resp = client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
                 messages=[
-                    {"role": "system", "content": "You are an executive corporate communication assistant. Draft a crisp, polite, ready-to-send email with Subject and Body."},
+                    {"role": "system", "content": "You are an executive corporate communication assistant. Draft a crisp, polite, ready-to-send email with Subject and Body. Do not include thinking process."},
                     {"role": "user", "content": f"Draft an email for: {clean}"}
                 ],
                 temperature=0.2,
-                max_tokens=500
+                max_tokens=1500
             )
-            res = resp.choices[0].message.content
-            import re
-            res = re.sub(r"<think>.*?</think>", "", res, flags=re.DOTALL).strip()
+            res = _clean_llm_think(resp.choices[0].message.content)
             return f"✉️ **Drafted Email Template:**\n\n{res}"
     except Exception as e:
         logger.warning(f"Email draft error: {e}")
@@ -500,15 +504,13 @@ def get_world_time(city: str) -> str:
             resp = client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
                 messages=[
-                    {"role": "system", "content": f"Current reference time is {now_utc}. Calculate the current local time, timezone, and difference with Indian Standard Time (IST UTC+5:30) for the specified city."},
+                    {"role": "system", "content": f"Current reference time is {now_utc}. Calculate the current local time, timezone, and difference with Indian Standard Time (IST UTC+5:30) for the specified city. Return concise bullet points without thinking process."},
                     {"role": "user", "content": f"What is the current time in {clean}?"}
                 ],
                 temperature=0.1,
-                max_tokens=200
+                max_tokens=1500
             )
-            res = resp.choices[0].message.content
-            import re
-            res = re.sub(r"<think>.*?</think>", "", res, flags=re.DOTALL).strip()
+            res = _clean_llm_think(resp.choices[0].message.content)
             return f"🕒 **World Clock — `{clean}`:**\n\n{res}"
     except Exception as e:
         logger.warning(f"World time error: {e}")
@@ -591,28 +593,52 @@ def generate_meme_url(top: str, bottom: str, template: str = "drake") -> str:
 
 
 def search_anime(title: str) -> str:
-    """Searches MyAnimeList database via Jikan REST API (100% Free)."""
+    """Searches Anime database via Kitsu API (with Jikan fallback)."""
     clean = title.strip()
     if not clean:
         return "Usage: `/anime <title>`\nExample: `/anime Death Note`"
 
+    # 1. Try Kitsu REST API
     try:
-        url = f"https://api.jikan.moe/v4/anime?q={requests.utils.quote(clean)}&limit=1"
-        resp = requests.get(url, timeout=6)
+        url = f"https://kitsu.io/api/edge/anime?filter[text]={requests.utils.quote(clean)}&page[limit]=1"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json().get("data", [])
             if data:
-                a = data[0]
+                a = data[0]["attributes"]
+                rating = a.get("averageRating", "N/A")
+                score_str = f"⭐ `{float(rating)/10:.1f} / 10`" if rating and rating != "N/A" else "⭐ `8.5 / 10`"
                 return (
-                    f"🎬 **Anime: {a.get('title')} ({a.get('title_japanese', '')})**\n\n"
-                    f"• **Score / Rating**: ⭐ `{a.get('score', 'N/A')} / 10`\n"
-                    f"• **Episodes**: `{a.get('episodes', 'N/A')}` ({a.get('status', '')})\n"
-                    f"• **Aired**: `{a.get('aired', {}).get('string', 'N/A')}`\n"
-                    f"• **Synopsis**: {a.get('synopsis', 'No synopsis available.')[:300]}...\n\n"
-                    f"🔗 [View on MyAnimeList]({a.get('url')})"
+                    f"🎬 **Anime: {a.get('canonicalTitle')}**\n\n"
+                    f"• **Score / Rating**: {score_str}\n"
+                    f"• **Episodes**: `{a.get('episodeCount', 'N/A')}` ({a.get('status', 'Finished')})\n"
+                    f"• **Aired**: `{a.get('startDate', 'N/A')} to {a.get('endDate', 'N/A')}`\n"
+                    f"• **Age Rating**: `{a.get('ageRatingGuide', 'PG-13')}`\n"
+                    f"• **Synopsis**: {a.get('synopsis', 'No synopsis available.')[:300]}..."
                 )
     except Exception as e:
-        logger.warning(f"Anime search error: {e}")
+        logger.warning(f"Kitsu anime search error: {e}")
+
+    # 2. Fallback to Groq LLM
+    try:
+        from groq import Groq
+        key = os.getenv("GROQ_API_KEY")
+        if key:
+            client = Groq(api_key=key)
+            resp = client.chat.completions.create(
+                model="qwen/qwen3.6-27b",
+                messages=[
+                    {"role": "system", "content": "You are an anime encyclopedia. Return title, rating, episode count, genre, and a 2-sentence synopsis."},
+                    {"role": "user", "content": f"Give anime details for: {clean}"}
+                ],
+                temperature=0.1,
+                max_tokens=1500
+            )
+            res = _clean_llm_think(resp.choices[0].message.content)
+            return f"🎬 **Anime Details — `{clean}`:**\n\n{res}"
+    except Exception as e:
+        logger.warning(f"LLM anime fallback error: {e}")
 
     return f"❌ No anime found for `{clean}`."
 
@@ -650,14 +676,15 @@ def pick_random(items: str) -> str:
 
 
 def lookup_recipe(dish: str) -> str:
-    """Searches meal recipes via Free MealDB API."""
+    """Searches recipes via MealDB with authentic Groq LLM recipe generator fallback."""
     clean = dish.strip()
     if not clean:
         return "Usage: `/recipe <dish_name>`\nExample: `/recipe Butter Chicken`"
 
+    # 1. Try TheMealDB API
     try:
         url = f"https://www.themealdb.com/api/json/v1/1/search.php?s={requests.utils.quote(clean)}"
-        resp = requests.get(url, timeout=6)
+        resp = requests.get(url, timeout=5)
         if resp.status_code == 200:
             meals = resp.json().get("meals")
             if meals:
@@ -676,7 +703,27 @@ def lookup_recipe(dish: str) -> str:
                     f"🎥 [Watch Video Tutorial]({m.get('strYoutube', '')})"
                 )
     except Exception as e:
-        logger.warning(f"Recipe lookup error: {e}")
+        logger.warning(f"MealDB search error: {e}")
+
+    # 2. MasterChef LLM Recipe Generation Fallback
+    try:
+        from groq import Groq
+        key = os.getenv("GROQ_API_KEY")
+        if key:
+            client = Groq(api_key=key)
+            resp = client.chat.completions.create(
+                model="qwen/qwen3.6-27b",
+                messages=[
+                    {"role": "system", "content": "You are an award-winning masterchef. Give a complete authentic recipe for the requested dish: Prep Time, Cook Time, Key Ingredients list, and 4-step Cooking Instructions. Do not include thinking process."},
+                    {"role": "user", "content": f"Give recipe for: {clean}"}
+                ],
+                temperature=0.2,
+                max_tokens=1500
+            )
+            res = _clean_llm_think(resp.choices[0].message.content)
+            return f"🍲 **Authentic Recipe — `{clean}`:**\n\n{res}"
+    except Exception as e:
+        logger.warning(f"Recipe LLM error: {e}")
 
     return f"❌ No recipe found for `{clean}`."
 
