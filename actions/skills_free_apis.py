@@ -5,6 +5,9 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import requests
+from dotenv import load_dotenv
+
+load_dotenv("/home/ubuntu/Rasa/.env")
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +312,123 @@ def get_etherscan_gas_price() -> str:
         logger.warning(f"Etherscan error: {e}")
 
     return "❌ Failed to fetch Etherscan gas data."
+
+
+def get_crypto_wallet_balance(address: str) -> str:
+    """
+    Checks the real-time balance of an Ethereum (ETH), Bitcoin (BTC), or Solana (SOL) wallet address
+    and calculates its total portfolio valuation in USD and INR using live CoinGecko prices.
+    """
+    clean_addr = address.strip()
+    if not clean_addr:
+        return "Usage: `/wallet <crypto_address>`\nExample: `/wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`"
+
+    # Fetch live prices from CoinGecko for valuation
+    prices = {"ethereum": {"usd": 0, "inr": 0}, "bitcoin": {"usd": 0, "inr": 0}, "solana": {"usd": 0, "inr": 0}}
+    try:
+        cg_res = requests.get(
+            "https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin,solana&vs_currencies=usd,inr&include_24hr_change=true",
+            timeout=5
+        )
+        if cg_res.status_code == 200:
+            prices = cg_res.json()
+    except Exception as e:
+        logger.warning(f"CoinGecko price fetch error during wallet valuation: {e}")
+
+    # 1. Ethereum / EVM Address (0x + 40 hex characters = 42 chars)
+    if clean_addr.startswith("0x") and len(clean_addr) == 42:
+        eth_key = os.getenv("ETHERSCAN_API_KEY", "")
+        if not eth_key:
+            return "⚠️ `ETHERSCAN_API_KEY` not configured in `.env`."
+        try:
+            url = f"https://api.etherscan.io/v2/api?chainid=1&module=account&action=balance&address={clean_addr}&tag=latest&apikey={eth_key}"
+            resp = requests.get(url, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "1":
+                    wei = int(data.get("result", 0))
+                    eth_amount = wei / 10**18
+                    eth_usd = prices.get("ethereum", {}).get("usd", 0)
+                    eth_inr = prices.get("ethereum", {}).get("inr", 0)
+                    total_usd = eth_amount * eth_usd
+                    total_inr = eth_amount * eth_inr
+
+                    return (
+                        f"💎 **Ethereum Wallet Balance:**\n"
+                        f"• Address: `{clean_addr[:10]}...{clean_addr[-6:]}`\n"
+                        f"• Holdings: **`{eth_amount:,.4f} ETH`**\n"
+                        f"• Portfolio Value: **`${total_usd:,.2f}`** | **`₹{total_inr:,.2f}`**\n"
+                        f"• Live ETH Price: `${eth_usd:,.2f}` (CoinGecko)\n"
+                        f"• Etherscan: https://etherscan.io/address/{clean_addr}"
+                    )
+                else:
+                    return f"❌ Etherscan error: {data.get('message', 'Invalid address or rate limited.')}"
+        except Exception as e:
+            logger.warning(f"Ethereum balance lookup error: {e}")
+            return f"❌ Failed to fetch Ethereum balance for `{clean_addr}`."
+
+    # 2. Bitcoin Address (starts with 1, 3, bc1q, bc1p)
+    elif clean_addr.startswith(("1", "3", "bc1q", "bc1p", "tb1")) and len(clean_addr) >= 26:
+        try:
+            url = f"https://mempool.space/api/address/{clean_addr}"
+            resp = requests.get(url, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                chain = data.get("chain_stats", {})
+                funded = chain.get("funded_txo_sum", 0)
+                spent = chain.get("spent_txo_sum", 0)
+                sats = funded - spent
+                btc_amount = sats / 10**8
+
+                btc_usd = prices.get("bitcoin", {}).get("usd", 0)
+                btc_inr = prices.get("bitcoin", {}).get("inr", 0)
+                total_usd = btc_amount * btc_usd
+                total_inr = btc_amount * btc_inr
+
+                return (
+                    f"₿ **Bitcoin Wallet Balance:**\n"
+                    f"• Address: `{clean_addr[:10]}...{clean_addr[-6:]}`\n"
+                    f"• Holdings: **`{btc_amount:,.8f} BTC`** ({sats:,} sats)\n"
+                    f"• Portfolio Value: **`${total_usd:,.2f}`** | **`₹{total_inr:,.2f}`**\n"
+                    f"• Live BTC Price: `${btc_usd:,.2f}` (CoinGecko)\n"
+                    f"• Mempool Explorer: https://mempool.space/address/{clean_addr}"
+                )
+        except Exception as e:
+            logger.warning(f"Bitcoin balance lookup error: {e}")
+            return f"❌ Failed to fetch Bitcoin balance for `{clean_addr}`."
+
+    # 3. Solana Address (32 to 44 Base58 characters)
+    elif 32 <= len(clean_addr) <= 44 and not clean_addr.startswith("0x"):
+        try:
+            resp = requests.post(
+                "https://api.mainnet-beta.solana.com",
+                json={"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [clean_addr]},
+                timeout=8
+            )
+            if resp.status_code == 200:
+                res_data = resp.json()
+                if "result" in res_data:
+                    lamports = res_data.get("result", {}).get("value", 0)
+                    sol_amount = lamports / 10**9
+
+                    sol_usd = prices.get("solana", {}).get("usd", 0)
+                    sol_inr = prices.get("solana", {}).get("inr", 0)
+                    total_usd = sol_amount * sol_usd
+                    total_inr = sol_amount * sol_inr
+
+                    return (
+                        f"🟣 **Solana Wallet Balance:**\n"
+                        f"• Address: `{clean_addr[:10]}...{clean_addr[-6:]}`\n"
+                        f"• Holdings: **`{sol_amount:,.4f} SOL`**\n"
+                        f"• Portfolio Value: **`${total_usd:,.2f}`** | **`₹{total_inr:,.2f}`**\n"
+                        f"• Live SOL Price: `${sol_usd:,.2f}` (CoinGecko)\n"
+                        f"• Solscan: https://solscan.io/account/{clean_addr}"
+                    )
+        except Exception as e:
+            logger.warning(f"Solana balance lookup error: {e}")
+            return f"❌ Failed to fetch Solana balance for `{clean_addr}`."
+
+    return f"❌ Unrecognized or invalid crypto wallet address: `{clean_addr}`. Supported chains: Ethereum (ETH), Bitcoin (BTC), Solana (SOL)."
 
 
 # ---------------------------------------------------------------------------

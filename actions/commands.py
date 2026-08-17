@@ -42,9 +42,7 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "**🌤️ Real-Time Free APIs:**\n"
             "• `/weather <city>` — Live weather (e.g. `/weather Mumbai`)\n"
             "• `/news [topic]` — Top headlines (e.g. `/news tech`)\n"
-            "• `/currency <amt> <from> <to>` — Currency conversion (e.g. `/currency 250 USD INR`)\n"
-            "• `/crypto [coin]` — Live crypto prices & ETH gas (e.g. `/crypto btc,eth`)\n"
-            "• `/wiki <topic>` — Wikipedia & books search (e.g. `/wiki Quantum Computing`)\n"
+            "• `/currency <amt> <from> <to>` — Currency conversion (e.g. `/currency 250 USD INR`)\n• `/crypto [coin]` — Live crypto prices (e.g. `/crypto btc,sol,ltc`)\n• `/wallet <address>` — Wallet balance & portfolio valuation in USD & INR (ETH/BTC/SOL)\n• `/gas` — Ethereum gas fee tracker (Etherscan)\n• `/wiki <topic>` — Wikipedia & books search (e.g. `/wiki Quantum Computing`)\n"
             "• `/movie <title>` — Movie / TV ratings & plot (e.g. `/movie Inception`)\n"
             "• `/holiday [country]` — Public holidays & festivals (e.g. `/holiday IN`)\n"
             "• `/image <query>` — Search HD photos (e.g. `/image sunset`)\n"
@@ -87,7 +85,7 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
 
     # 2. /weather <city>
     elif cmd == "/weather":
-        city = args_str if args_str else "Delhi"
+        city = args_str if args_str else "Malda, West Bengal, India"
         return {"handled": True, "text": apis.get_weather_data(city)}
 
     # 3. /news [topic]
@@ -109,8 +107,20 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
 
     # 5. /crypto [coin]
     elif cmd == "/crypto":
+        if args_str and (args_str.startswith(("0x", "1", "3", "bc1", "tb1")) or len(args_str) > 30):
+            return {"handled": True, "text": apis.get_crypto_wallet_balance(args_str)}
         coins = args_str if args_str else "bitcoin,ethereum,solana,dogecoin"
         return {"handled": True, "text": apis.get_crypto_price(coins)}
+
+    # 5b. /wallet <address> or /balance <address>
+    elif cmd in ["/wallet", "/balance"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/wallet <crypto_address>`\nExample: `/wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` (ETH) or `/wallet 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa` (BTC)"}
+        return {"handled": True, "text": apis.get_crypto_wallet_balance(args_str)}
+
+    # 5c. /gas (Ethereum Gas Tracker)
+    elif cmd in ["/gas", "/ethgas"]:
+        return {"handled": True, "text": apis.get_etherscan_gas_price()}
 
     # 6. /wiki <topic>
     elif cmd in ["/wiki", "/wikipedia"]:
