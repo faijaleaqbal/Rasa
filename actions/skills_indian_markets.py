@@ -180,50 +180,221 @@ def get_fuel_rates(city: str = "Delhi") -> str:
 
 def get_train_pnr_status(pnr: str) -> str:
     """
-    Validates and explains Indian Railways 10-digit PNR booking status.
+    Validates and fetches real-time Indian Railways 10-digit PNR booking & confirmation status.
+    Returns complete details including train info, route, timings, chart status,
+    passenger-wise coach/berth/WL status, confirmation probability, fare, and platform.
     """
     clean_pnr = re.sub(r"\D", "", pnr.strip())
     if len(clean_pnr) != 10:
-        return "❌ **Invalid PNR Number!** Indian Railways PNR must be exactly 10 digits.\nExample: `/pnr 2451893420`"
+        return (
+            "❌ **Invalid PNR Number!** Indian Railways PNR must be exactly 10 digits.\n"
+            "Example: `/pnr 2451893420`"
+        )
 
+    # Class and Quota descriptions for user clarity
+    class_map = {
+        "1A": "1A (AC First Class)",
+        "2A": "2A (AC 2-Tier)",
+        "3A": "3A (AC 3-Tier)",
+        "3E": "3E (AC 3 Economy)",
+        "CC": "CC (AC Chair Car)",
+        "EC": "EC (Executive Chair Car)",
+        "SL": "SL (Sleeper Class)",
+        "2S": "2S (Second Sitting)",
+        "EV": "EV (Vistadome AC)",
+        "EA": "EA (Executive Anubhuti)",
+    }
+    quota_map = {
+        "GN": "GN (General Quota)",
+        "TQ": "TQ (Tatkal Quota)",
+        "PT": "PT (Premium Tatkal)",
+        "LD": "LD (Ladies Quota)",
+        "HO": "HO (HQ Quota)",
+        "DF": "DF (Defense Quota)",
+        "SS": "SS (Senior Citizen)",
+        "DP": "DP (Duty Pass)",
+        "FT": "FT (Foreign Tourist)",
+    }
+
+    # 1. Fetch live PNR data from real-time API
+    api_url = f"https://api.confirmtkt.com/api/pnr/status/{clean_pnr}"
+    api_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+    }
+
+    data = None
+    try:
+        resp = requests.get(api_url, headers=api_headers, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+    except Exception as e:
+        logger.warning(f"Live PNR API call failed for {clean_pnr}: {e}")
+
+    # If valid booking data received from API
+    if data and (data.get("TrainNo") or data.get("TrainName") or data.get("PassengerStatus")):
+        train_no = data.get("TrainNo") or "N/A"
+        train_name = data.get("TrainName") or "Express / Special"
+        
+        from_stn = data.get("SourceName") or data.get("From") or "Origin"
+        from_code = data.get("From") or ""
+        to_stn = data.get("DestinationName") or data.get("To") or "Destination"
+        to_code = data.get("To") or ""
+        
+        boarding = data.get("BoardingStationName") or from_stn
+        b_code = data.get("BoardingPoint") or from_code
+        res_upto = data.get("ReservationUptoName") or to_stn
+        r_code = data.get("ReservationUpto") or to_code
+
+        doj = data.get("Doj") or "N/A"
+        booking_date = data.get("BookingDate")
+        dep_time = data.get("DepartureTime") or "--:--"
+        arr_time = data.get("ArrivalTime") or "--:--"
+        duration = data.get("Duration")
+        
+        raw_class = data.get("Class") or ""
+        cls_name = class_map.get(raw_class, raw_class) if raw_class else "N/A"
+        
+        raw_quota = data.get("Quota") or ""
+        quota_name = quota_map.get(raw_quota, raw_quota) if raw_quota else "GN"
+
+        chart_prep = data.get("ChartPrepared", False)
+        chart_badge = "🟢 **Chart Prepared**" if chart_prep else "⏳ **Chart Not Prepared**"
+
+        platform = data.get("ExpectedPlatformNo")
+        fare = data.get("TicketFare") or data.get("BookingFare")
+        has_pantry = data.get("HasPantry")
+        coach_pos = data.get("CoachPosition")
+        train_status = data.get("TrainStatus")
+
+        passengers = data.get("PassengerStatus") or []
+        pass_count = data.get("PassengerCount") or len(passengers)
+
+        output_lines = [
+            f"🚆 **IRCTC PNR Status Tracker — `{clean_pnr}`**",
+            "",
+            f"📋 **Train**: **{train_no} — {train_name}**",
+            f"🗓️ **Journey Date (DOJ)**: `{doj}`" + (f" _(Booked on: {booking_date})_" if booking_date else ""),
+            f"🛤️ **Route**: **{from_stn} ({from_code})** ➡️ **{to_stn} ({to_code})**",
+        ]
+
+        if (b_code and b_code != from_code) or (r_code and r_code != to_code):
+            output_lines.append(f"📍 **Boarding / Reservation**: {boarding} ({b_code}) ➔ {res_upto} ({r_code})")
+
+        timing_str = f"⏰ **Schedule**: Dep: `{dep_time}` ➔ Arr: `{arr_time}`"
+        if duration:
+            timing_str += f" _(Duration: {duration})_"
+        output_lines.append(timing_str)
+
+        output_lines.append(f"💺 **Class & Quota**: `{cls_name}` | `{quota_name}`")
+        output_lines.append(f"📊 **Charting Status**: {chart_badge}")
+
+        if platform:
+            output_lines.append(f"🚉 **Expected Platform**: `{platform}`")
+        if fare:
+            output_lines.append(f"💰 **Total Fare**: `₹{fare}`")
+        if has_pantry is not None:
+            output_lines.append(f"🍽️ **Pantry Service**: " + ("✅ Available" if has_pantry else "❌ Not Available"))
+        if coach_pos:
+            output_lines.append(f"🚃 **Coach Position**: `{coach_pos}`")
+        if train_status:
+            output_lines.append(f"ℹ️ **Train Running Status**: {train_status}")
+
+        output_lines.append("")
+        output_lines.append(f"👥 **Passenger Breakdown ({pass_count} Passenger{'s' if pass_count != 1 else ''})**:")
+        
+        if passengers:
+            for idx, p in enumerate(passengers, start=1):
+                p_num = p.get("Number") or idx
+                b_stat = p.get("BookingStatusDetails") or p.get("BookingStatus") or "N/A"
+                c_stat = p.get("CurrentStatusDetails") or p.get("CurrentStatus") or "N/A"
+                
+                coach = p.get("CurrentCoachId") or p.get("Coach") or ""
+                berth = p.get("CurrentBerthNo") or p.get("Berth") or ""
+                b_type = p.get("BerthType") or p.get("BerthCode") or ""
+                pred = p.get("PredictionPercentage") or p.get("Prediction")
+                
+                seat_details = []
+                if coach:
+                    seat_details.append(f"Coach **{coach}**")
+                if berth:
+                    seat_details.append(f"Berth **{berth}**")
+                if b_type:
+                    seat_details.append(f"({b_type})")
+                
+                seat_str = f" 👉 {' '.join(seat_details)}" if seat_details else ""
+                
+                # Probability display for Waitlist / RAC
+                pred_str = ""
+                if pred and str(pred).isdigit() and int(pred) < 100 and "CNF" not in c_stat.upper():
+                    pred_str = f" _(Confirmation Chance: {pred}%)_"
+
+                # Status indicator emoji
+                stat_emoji = "🟢" if "CNF" in c_stat.upper() or "CONFIRM" in c_stat.upper() else ("🟡" if "RAC" in c_stat.upper() else "🔴")
+
+                output_lines.append(
+                    f"{stat_emoji} **Passenger {p_num}**: Current: `{c_stat}`{seat_str}{pred_str} | Booking: `{b_stat}`"
+                )
+        else:
+            output_lines.append("• _No individual passenger status returned._")
+
+        output_lines.extend([
+            "",
+            "🔗 **Official Verification & Helplines**:",
+            f"• 🌐 [Official Indian Rail PNR Portal](http://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html)",
+            f"• 💬 SMS Enquiry: Send `PNR {clean_pnr}` to `139`",
+            "• 📞 24x7 Railway Helpline / NTES: Dial `139`"
+        ])
+        return "\n".join(output_lines)
+
+    # If API returned an error or flushed PNR
+    error_msg = data.get("Error", "") if isinstance(data, dict) else ""
+    is_flushed = "flushed" in error_msg.lower() or "not yet generated" in error_msg.lower()
+
+    # Try LLM for intelligent assistant guidance if available
+    llm_context = ""
     try:
         from groq import Groq
         key = os.getenv("GROQ_API_KEY")
         if key:
             client = Groq(api_key=key)
+            prompt = (
+                f"The user checked Indian Railways PNR: {clean_pnr}. "
+                f"The live system response indicates: '{error_msg or 'No active chart record found'}'. "
+                f"Provide a brief 2-bullet explanation of why a PNR might be flushed (past journey) or not found, "
+                f"and how they can confirm their booking status on IRCTC or via SMS 139."
+            )
             resp = client.chat.completions.create(
                 model="qwen/qwen3.6-27b",
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an Indian Railways IRCTC assistant. Format a structured PNR status lookup guide "
-                            "with Indian Railways helpline 139 and official IRCTC portal direct links. Keep it crisp with emojis."
-                        )
-                    },
-                    {"role": "user", "content": f"PNR: {clean_pnr}"}
+                    {"role": "system", "content": "You are a helpful Indian Railways IRCTC assistant. Keep your response brief and structured."},
+                    {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
-                max_tokens=600
+                max_tokens=300
             )
-            llm_text = _clean_llm_think(resp.choices[0].message.content)
-            return (
-                f"🚆 **IRCTC PNR Status Tracker — `{clean_pnr}`**\n\n"
-                f"• **PNR Number**: `{clean_pnr}`\n"
-                f"• **Official IRCTC Live Status**: [Check on Indian Rail Portal](http://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html)\n"
-                f"• **SMS Enquiry**: Send `PNR {clean_pnr}` to `139`\n\n"
-                f"{llm_text}"
-            )
+            llm_context = _clean_llm_think(resp.choices[0].message.content)
     except Exception as e:
-        logger.error(f"PNR lookup error: {e}")
+        logger.error(f"LLM PNR assistant error: {e}")
+
+    status_headline = (
+        "⚠️ **PNR Record Flushed / Past Journey / Inactive**"
+        if is_flushed
+        else "⚠️ **PNR Status Lookup**"
+    )
 
     return (
-        f"🚆 **IRCTC PNR Status — `{clean_pnr}`**\n\n"
-        f"• **PNR**: `{clean_pnr}`\n"
-        f"• **Official Verification**: [IRCTC Enquiry Portal](http://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html)\n"
-        f"• **Railway Helpline / IVRS**: Dial `139`\n"
-        f"• **Status**: PNR recorded. You can track live chart status on NTES."
+        f"🚆 **IRCTC PNR Status Tracker — `{clean_pnr}`**\n\n"
+        f"{status_headline}\n\n"
+        f"• **PNR Number**: `{clean_pnr}`\n"
+        f"• **Status**: `{error_msg or 'No active booking data found in the live charting system.'}`\n\n"
+        + (f"{llm_context}\n\n" if llm_context else "") +
+        f"🔗 **How to verify directly**:\n"
+        f"• 🌐 **Official Indian Railways Portal**: [Check on Indian Rail Portal](http://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html)\n"
+        f"• 💬 **Instant SMS Check**: Send `PNR {clean_pnr}` to `139`\n"
+        f"• 📞 **IRCTC & NTES 24x7 Helpline**: Dial `139`"
     )
+
 
 
 def get_train_live_status(train_number_or_name: str) -> str:

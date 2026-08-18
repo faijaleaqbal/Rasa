@@ -28,6 +28,7 @@ from . import skills_developer_tools as dev
 from . import skills_converters_resume as conv
 from . import skills_mobile_device as mob
 from . import skills_android_controller as android
+from . import skills_advanced as adv
 from . import security_guardrails as security
 from . import mcp_client as mcp
 
@@ -1155,6 +1156,107 @@ LLM_TOOLS_SPEC = [
                 "required": ["caller_statement"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_upi_qr",
+            "description": "Generate dynamic UPI scan-and-pay QR code for GPay, PhonePe, Paytm, BHIM with amount, payee name and note.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "vpa": {"type": "string", "description": "Payee UPI VPA ID, e.g. username@okaxis or 9876543210@paytm"},
+                    "amount": {"type": "number", "description": "Optional payment amount in INR"},
+                    "payee_name": {"type": "string", "description": "Optional name of payee/business"},
+                    "note": {"type": "string", "description": "Optional transaction remark/note"}
+                },
+                "required": ["vpa"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_live_web",
+            "description": "Perform live internet search and get synthesized real-time facts, news, and links.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for real-time web search"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lookup_medicine_info",
+            "description": "Get detailed clinical pharmacology guide, uses, side effects, precautions, and low-cost generic alternatives for medicines in India.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "medicine_name": {"type": "string", "description": "Name of medicine or active salt (e.g. Dolo 650, Augmentin, Paracetamol)"}
+                },
+                "required": ["medicine_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "inspect_ssl_cert",
+            "description": "Inspect real-time SSL/TLS certificate validity, expiry date, days left, issuer CA, and encryption cipher for a domain.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string", "description": "Domain name to inspect (e.g. google.com, github.com)"}
+                },
+                "required": ["domain"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "inspect_domain_whois",
+            "description": "Lookup ICANN RDAP WHOIS records, domain registrar, creation date, expiry date, and nameservers for a website domain.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string", "description": "Domain name (e.g. openai.com, amazon.in)"}
+                },
+                "required": ["domain"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "extract_ocr_text",
+            "description": "Extract and transcribe text from an image, document, receipt, bill, or photo via OCR.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "image_path_or_url": {"type": "string", "description": "Local path or URL of the image"}
+                },
+                "required": ["image_path_or_url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "transcribe_audio",
+            "description": "Transcribe audio file or voice note into text using Groq Whisper model.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "audio_path_or_url": {"type": "string", "description": "Local file path or URL of audio/voice recording"}
+                },
+                "required": ["audio_path_or_url"]
+            }
+        }
     }
 ]
 
@@ -1352,6 +1454,28 @@ def execute_tool_call(tool_name: str, args: Dict[str, Any], user_id: str, chat_i
             return android.open_file_or_app_on_phone(args.get("target", "WhatsApp"))
         elif tool_name == "screen_incoming_call_message":
             return android.screen_incoming_call_message(args.get("caller_number", "Unknown"), args.get("caller_statement", ""))
+        elif tool_name == "generate_upi_qr":
+            res_u = adv.generate_upi_qr(
+                vpa=args.get("vpa", ""),
+                amount=float(args.get("amount", 0)) if args.get("amount") else None,
+                payee_name=args.get("payee_name"),
+                note=args.get("note")
+            )
+            if res_u.get("file_path") and chat_id:
+                docs.send_telegram_file(chat_id, res_u["file_path"], caption=res_u.get("text", "⚡ UPI QR"), file_type="photo")
+            return res_u.get("text", "UPI QR Code generated.")
+        elif tool_name == "search_live_web":
+            return adv.search_live_web(args.get("query", ""))
+        elif tool_name == "lookup_medicine_info":
+            return adv.lookup_medicine_info(args.get("medicine_name", ""))
+        elif tool_name == "inspect_ssl_cert":
+            return adv.inspect_ssl_certificate(args.get("domain", ""))
+        elif tool_name == "inspect_domain_whois":
+            return adv.inspect_domain_whois(args.get("domain", ""))
+        elif tool_name == "extract_ocr_text":
+            return adv.extract_ocr_text(args.get("image_path_or_url", ""))
+        elif tool_name == "transcribe_audio":
+            return adv.transcribe_audio(args.get("audio_path_or_url", ""))
 
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
@@ -1380,9 +1504,15 @@ class ActionLLMResponse(Action):
         chat_id = str(tracker.current_state().get("latest_message", {}).get("metadata", {}).get("chat_id") or sender_id)
         user_id = sender_id
 
-        logger.info(f"action_llm_response triggered for user {user_id} message: {user_message}")
+        # 0a. Check if message is a slash command
+        if user_message.strip().startswith("/"):
+            from . import commands
+            cmd_res = commands.handle_slash_command(user_message, user_id, chat_id)
+            if cmd_res.get("handled"):
+                dispatcher.utter_message(text=cmd_res.get("text", ""))
+                return []
 
-        # 0. Check if user is confirming or canceling a pending high-risk action
+        # 0b. Check if user is confirming or canceling a pending high-risk action
         was_v, verified_action, v_msg = security.handle_user_verification_response(user_message, user_id)
         if was_v:
             if verified_action:

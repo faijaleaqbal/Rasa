@@ -10,9 +10,16 @@ Facilitates travel planning, multi-provider fare comparisons, PNR status lookup,
 ## Core Capabilities
 
 ### 1. PNR Status Tracking & Train Live Status
-* Direct query to Indian Railways / Rapid API endpoints for 10-digit PNR.
-* Extract: Train number, source/destination, charting status, passenger berths (CNF/RAC/WL).
-* Alert user automatically if ticket status updates from WL to CNF.
+* Real-time query to Indian Railways / IRCTC live PNR endpoints for 10-digit PNR.
+* Extract and display complete booking details:
+  - **Train Information**: Train Number, Train Name, Train Running Status.
+  - **Route & Stations**: Origin, Destination, Boarding Point, Reservation Upto with station codes and full names.
+  - **Schedule**: Date of Journey (DOJ), Booking Date, Departure Time, Arrival Time, Duration.
+  - **Class & Quota**: Full class description (e.g., 3A AC 3-Tier, SL Sleeper) and Quota (General, Tatkal, Premium Tatkal).
+  - **Charting Status**: Live Charting badge (🟢 Chart Prepared / ⏳ Chart Not Prepared).
+  - **Passenger Breakdown**: Individual passenger status (CNF / RAC / WL), assigned Coach & Berth number, Berth Type (Lower/Middle/Upper/Side), and Confirmation Probability percentage for waitlist.
+  - **Amenities & Logistics**: Expected Platform Number, Total Ticket Fare (₹), Pantry Car availability, Coach Composition.
+  - **Official Verification**: Direct links to official Indian Rail PNR Portal, SMS `139` enquiry, and 24x7 helpline.
 
 ### 2. Flight & Hotel Aggregation Strategy
 * Compare routes across major aggregators (Google Flights, Skyscanner, MakeMyTrip).

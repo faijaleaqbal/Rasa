@@ -16,6 +16,7 @@ from . import skills_developer_tools as dev
 from . import skills_converters_resume as conv
 from . import skills_mobile_device as mob
 from . import skills_android_controller as android
+from . import skills_advanced as adv
 from . import mcp_client as mcp
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,14 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
     if cmd in ["/start", "/help", "/commands"]:
         help_text = (
             "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
+            "**🌟 New Advanced Super-Skills:**\n"
+            "• `/upi <vpa> [amount] [name] [note]` — Instant Dynamic UPI scan-and-pay QR code (GPay/PhonePe/Paytm)\n"
+            "• `/search <query>` — Real-time live AI Web Search & Synthesis (Tavily & DDG)\n"
+            "• `/transcribe [url_or_file]` — Groq Whisper audio & voice note transcription with AI summary\n"
+            "• `/med <medicine>` — Clinical medicine uses, active salt, precautions & low-cost generic alternatives\n"
+            "• `/ssl <domain>` — Real-time SSL certificate validity, expiry countdown & cipher check\n"
+            "• `/whois <domain>` — ICANN RDAP domain registrar, registration & expiry lookup\n"
+            "• `/ocr [url_or_file]` — High-accuracy image-to-text extractor (Tesseract + AI polish)\n\n"
             "**🌤️ Real-Time Free APIs:**\n"
             "• `/weather <city>` — Live weather (Default: Malda, WB)\n"
             "• `/news [topic]` — Top headlines (English)\n"
@@ -775,5 +784,77 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
     # 101. /callscreen <caller_statement>
     elif cmd in ["/callscreen", "/screen", "/voicemail"]:
         return {"handled": True, "text": android.screen_incoming_call_message("Unknown Caller", args_str)}
+
+    # 102. /upi <vpa> [amount] [name] [note]
+    elif cmd in ["/upi", "/payqr", "/upiqr"]:
+        if not args_str:
+            return {
+                "handled": True,
+                "text": (
+                    "**Usage:** `/upi <vpa_id> [amount] [name] [note]`\n"
+                    "**Example:** `/upi 9876543210@paytm 500 \"Md Faijal\" \"Dinner\"`\n"
+                    "**Or simple:** `/upi faijal@okaxis`"
+                )
+            }
+        try:
+            toks = shlex.split(args_str)
+        except Exception:
+            toks = args_str.split()
+
+        vpa_id = toks[0]
+        amt_val = None
+        p_name = None
+        p_note = None
+
+        if len(toks) > 1:
+            try:
+                amt_val = float(toks[1])
+            except ValueError:
+                p_name = toks[1]
+        if len(toks) > 2:
+            if p_name is None:
+                p_name = toks[2]
+            else:
+                p_note = toks[2]
+        if len(toks) > 3:
+            p_note = toks[3]
+
+        return adv.generate_upi_qr(vpa=vpa_id, amount=amt_val, payee_name=p_name, note=p_note)
+
+    # 103. /search <query>
+    elif cmd in ["/search", "/google", "/websearch"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/search <query>`\nExample: `/search latest tech news 2026`"}
+        return {"handled": True, "text": adv.search_live_web(args_str)}
+
+    # 104. /transcribe [url_or_path]
+    elif cmd in ["/transcribe", "/stt", "/voicetotext", "/audio"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/transcribe <audio_url_or_path>`\nExample: `/transcribe https://example.com/sample.mp3` or send a voice message directly in chat!"}
+        return {"handled": True, "text": adv.transcribe_audio(args_str)}
+
+    # 105. /med <medicine> or /medicine <medicine>
+    elif cmd in ["/med", "/medicine", "/dawa", "/drug"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/med <medicine_name>`\nExample: `/med Dolo 650` or `/med Augmentin 625`"}
+        return {"handled": True, "text": adv.lookup_medicine_info(args_str)}
+
+    # 106. /ssl <domain>
+    elif cmd in ["/ssl", "/tls", "/cert", "/certificate"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/ssl <domain>`\nExample: `/ssl google.com` or `/ssl github.com`"}
+        return {"handled": True, "text": adv.inspect_ssl_certificate(args_str)}
+
+    # 107. /whois <domain>
+    elif cmd in ["/whois", "/rdap", "/domain"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/whois <domain>`\nExample: `/whois github.com` or `/whois openai.com`"}
+        return {"handled": True, "text": adv.inspect_domain_whois(args_str)}
+
+    # 108. /ocr [url_or_path]
+    elif cmd in ["/ocr", "/extracttext", "/readimage"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/ocr <image_url_or_path>`\nExample: `/ocr https://example.com/receipt.png` or send a photo directly in chat!"}
+        return {"handled": True, "text": adv.extract_ocr_text(args_str)}
 
     return {"handled": False}

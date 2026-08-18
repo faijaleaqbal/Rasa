@@ -48,7 +48,7 @@ class LLMProviderManager:
                 "name": "Groq",
                 "url": "https://api.groq.com/openai/v1/chat/completions",
                 "key": os.getenv("GROQ_API_KEY", ""),
-                "models": [os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"), "qwen/qwen3.6-27b", "openai/gpt-oss-120b"],
+                "models": [os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"), "openai/gpt-oss-120b", "qwen/qwen3.6-27b"],
                 "headers": lambda k: {"Authorization": f"Bearer {k}"}
             },
             {
