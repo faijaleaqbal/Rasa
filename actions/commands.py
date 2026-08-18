@@ -28,165 +28,56 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[str, Any]:
+_LAST_USER_MEDIA: Dict[str, str] = {}
+
+
+def set_last_user_media(user_id: str, file_path: str) -> None:
+    """Caches the most recently uploaded user media file for subsequent commands."""
+    if user_id and file_path and os.path.exists(file_path):
+        _LAST_USER_MEDIA[str(user_id)] = file_path
+
+
+def get_last_user_media(user_id: str) -> Optional[str]:
+    """Retrieves cached media file if still present on disk."""
+    fpath = _LAST_USER_MEDIA.get(str(user_id))
+    if fpath and os.path.exists(fpath):
+        return fpath
+    return None
+
+
+def handle_slash_command(
+    command_text: str,
+    user_id: str,
+    chat_id: str,
+    attachment_path: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Directly processes Telegram slash commands with deterministic argument parsing.
     Returns a dict with:
       - 'handled': bool
       - 'text': str (Markdown response)
       - 'file_path': Optional[str] (Local file to send, e.g. PDF/Excel/Word)
-      - 'file_type': str ('document' / 'photo')
+      - 'file_type': str ('document' / 'photo' / 'audio')
     """
     clean_text = command_text.strip()
     if not clean_text.startswith("/"):
         return {"handled": False}
 
+    if attachment_path and os.path.exists(attachment_path):
+        set_last_user_media(user_id, attachment_path)
+
     parts = clean_text.split(maxsplit=1)
     raw_cmd = parts[0].lower()
-    # Strip bot username if attached, e.g. /weather@Alya_Rasa_Bot
+    # Strip bot username if attached, e.g. /compress@Alya_Rasa_Bot -> /compress
     cmd = raw_cmd.split("@")[0]
     args_str = parts[1].strip() if len(parts) > 1 else ""
 
-    logger.info(f"Processing slash command: {cmd} with args '{args_str}' for user {user_id}")
+    logger.info(f"Processing slash command: {cmd} with args '{args_str}' for user {user_id} (attachment: {attachment_path})")
 
     # 1. /help or /start or /menu
     if cmd in ["/start", "/help", "/commands", "/menu", "/allcommands"]:
-        help_text = (
-            "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
-            "**🖼️ Image Tools & Passport Studio:**\n"
-            "• `/imagetools` — Open Image Tools Studio & features guide\n"
-            "• `/presets` — Browse Govt photo, Passport, Social Media & Print presets\n"
-            "• `/passport [country]` — Indian, US, UK passport photo specifications & creator\n"
-            "• `/compress <file>` — Smart image compressor (Target KB/MB mode, JPEG/PNG/WebP)\n"
-            "• `/exif <file>` & `/strip_exif` — Photo EXIF metadata inspector & GPS privacy stripper\n\n"
-            "**🌟 Advanced Super-Skills:**\n"
-            "• `/adduser <user_id> [name]` — (Admin) Grant bot access to a Telegram user\n"
-            "• `/removeuser <user_id>` — (Admin) Revoke bot access for a Telegram user\n"
-            "• `/users` — (Admin) List all authorized Telegram users\n"
-            "• `/today` — Today in History major events, milestones & famous birthdays\n"
-            "• `/pan <pan_no>` & `/gstin <gstin_no>` — Indian PAN Card & GSTIN structure validator\n"
-            "• `/unit <val> <from> to <to>` — Universal & Indian Land Unit converter (Bigha, Acre, Guntha, Gaj, SqFt, Kg)\n"
-            "• `/horoscope <zodiac_sign>` — Daily astrological predictions, career, love & lucky numbers\n"
-            "• `/hackernews` — Top 5 trending tech & startup stories from Hacker News\n"
-            "• `/slang <word_or_idiom>` — Gen-Z slangs, internet jargon & idioms decoder\n"
-            "• `/upi <vpa> [amount] [name] [note]` — Instant Dynamic UPI scan-and-pay QR code (GPay/PhonePe/Paytm)\n"
-            "• `/search <query>` — Real-time live AI Web Search & Synthesis (Tavily & DDG)\n"
-            "• `/transcribe [url_or_file]` — Groq Whisper audio & voice note transcription with AI summary\n"
-            "• `/med <medicine>` — Clinical medicine uses, active salt, precautions & low-cost generic alternatives\n"
-            "• `/ssl <domain>` — Real-time SSL certificate validity, expiry countdown & cipher check\n"
-            "• `/whois <domain>` — ICANN RDAP domain registrar, registration & expiry lookup\n"
-            "• `/ocr [url_or_file]` — High-accuracy image-to-text extractor (Tesseract + AI polish)\n"
-            "• `/voice <text>` — Realistic Neural Voice Note generator (Edge-TTS Hindi/English)\n"
-            "• `/aqi [city]` — Real-time live Air Quality Index (PM2.5, PM10 & Health Advisory)\n"
-            "• `/ipo` — Indian Mainboard & SME IPO Calendar & Grey Market Premium (GMP)\n"
-            "• `/phish <url>` — Anti-phishing, fake bank trap & link safety scanner\n"
-            "• `/postoffice <pin_or_area>` — India Post office branch finder & delivery status\n"
-            "• `/ping <host>` — Server uptime & TCP latency ping\n"
-            "• `/solve <question_or_photo>` — AI Question & Exam Problem Solver from photo or text\n"
-            "• `/compare <item1> vs <item2>` — Side-by-side AI specs, pros/cons & tech comparison\n"
-            "• `/wayback <url>` — Wayback Machine historical snapshots & deleted page viewer\n"
-            "• `/mergepdf <files>` & `/splitpdf` — Merge multiple PDFs or extract page ranges\n\n"
-            "**⏱️ Timezone-Aware Reminders & Productivity:**\n"
-            "• `/remind <time> <msg>` — Timezone-aware reminder scheduler (IST default)\n"
-            "• `/reminders` & `/delremind <id>` — View & cancel active scheduled reminders\n"
-            "• `/set_timezone <tz>` & `/mytimezone` — Set & check preferred timezone (e.g. `Asia/Kolkata`, `EST`, `UTC`)\n"
-            "• `/medremind <time> <medicine>` — Scheduled medicine dosage reminders\n"
-            "• `/note <text>` & `/notes [query]` — Persistent user notepad\n"
-            "• `/todo <task>` & `/todos` — To-Do task manager with `/done <id>`\n"
-            "• `/qr <text_or_url>` — Generate HD QR code image\n"
-            "• `/barcode <number>` — Generate Code128 barcode image\n"
-            "• `/pincode <pin_or_area>` — India Post PIN code & area lookup\n"
-            "• `/ifsc <code>` — Bank branch & IFSC finder (Razorpay API)\n"
-            "• `/shorten <url>` — Create short TinyURL link\n"
-            "• `/time <city>` — World clock & timezone converter\n"
-            "• `/countdown <date>` — Event countdown tracker\n"
-            "• `/traffic <from> to <to>` — Commute ETA & route\n"
-            "• `/serverstatus` — EC2 CPU, RAM, Disk health\n"
-            "• `/speedtest` — Internet speed test\n\n"
-            "**💻 Developer, DB & MCP Supertools:**\n"
-            "• `/code <command or task>` — OpenCode MCP shell execution & coding engine\n"
-            "• `/sh <cmd>` or `/exec <cmd>` — Direct host terminal execution with genuine stdout/stderr\n"
-            "• `/github [repo]` — List GitHub repos, issues, and PRs\n"
-            "• `/screenshot <url>` — Live high-res website screenshot capture\n"
-            "• `/py <code>` — Python code execution sandbox\n"
-            "• `/sql <query>` — SQLite database query & table inspector\n"
-            "• `/kg <add|list|search>` — Knowledge Graph & relational memory\n"
-            "• `/social <url>` — Twitter/X, Reddit post content extractor\n"
-            "• `/log [service]` — Inspect live server & bot logs\n"
-            "• `/dns <domain>` — DNS records (A, MX, NS, TXT) lookup\n"
-            "• `/http <url>` — HTTP status, response latency & headers\n"
-            "• `/cron <expr>` — Translate cron syntax to plain English\n"
-            "• `/json <text>` — Format, minify & validate JSON\n"
-            "• `/ip [ip_address]` — Geo-IP location, ISP & ASN lookup\n\n"
-            "**🌤️ Real-Time Free APIs:**\n"
-            "• `/weather <city>` — Live weather (Default: Malda, WB)\n"
-            "• `/news [topic]` — Top headlines (English)\n"
-            "• `/currency <amt> <from> <to>` — Currency exchange conversion\n"
-            "• `/crypto [coin]` — Live crypto prices & tickers\n"
-            "• `/wallet <address>` — Multi-chain wallet balance & valuation (ETH/BTC/SOL)\n"
-            "• `/gas` — Ethereum gas fee tracker (Etherscan)\n"
-            "• `/wiki <topic>` — Wikipedia & books search\n"
-            "• `/movie <title>` — Movie / TV ratings & plot (OMDb/TMDB)\n"
-            "• `/holiday [country]` — Public holidays & festivals\n"
-            "• `/image <query>` — Search HD photos (Unsplash/Pexels)\n"
-            "• `/translate <text>` — Dictionary & translation\n"
-            "• `/joke` — Random clean joke & inspirational quote\n"
-            "• `/math <expression>` — WolframAlpha & SymPy solver\n"
-            "• `/science` — NASA Astronomy Picture of the Day\n\n"
-            "**🔐 Privacy & Security:**\n"
-            "• `/passgen [length]` — Cryptographically strong password generator\n"
-            "• `/hash <text>` — MD5, SHA-1, SHA-256, Base64 converter\n"
-            "• `/unshorten <url>` — Safe URL redirect expander\n"
-            "• `/breach <email_or_pwd>` — Data breach check via XposedOrNot & HIBP\n"
-            "• `/tempmail` — Generate disposable temporary email inbox\n"
-            "• `/checkmail <login> <domain>` — Check OTP & incoming temporary emails\n\n"
-            "**📊 Indian Markets & Wealth:**\n"
-            "• `/stock <ticker>` — Live NSE/BSE & global stock quotes & day trend\n"
-            "• `/nifty` & `/sensex` — Instant Indian index snapshots\n"
-            "• `/gold` & `/silver` — Live 24K/22K 10g Gold & 1kg Silver bullion rates\n"
-            "• `/fuel [city]` — Daily Petrol, Diesel & CNG prices\n\n"
-            "**🚆 Travel & Indian Transit:**\n"
-            "• `/pnr <10-digit PNR>` — IRCTC train booking & confirmation status\n"
-            "• `/train <number_or_name>` — Indian Railways live schedule & NTES route\n"
-            "• `/flight <flight_no>` — Live flight status, airline, and radar\n\n"
-            "**📝 Smart Content & AI Summaries:**\n"
-            "• `/youtube <url>` — YouTube video transcript & executive summary\n"
-            "• `/summarize <url>` — Webpage / article instant markdown summary\n"
-            "• `/briefing` — Consolidated morning briefing (Weather, News, Markets, Planner)\n\n"
-            "**💰 Financial & Calculators:**\n"
-            "• `/sip <monthly> <rate> <years>` — Mutual Fund SIP wealth compounding calculator\n"
-            "• `/emi <loan> <rate> <years>` — Loan EMI, interest & amortization calculator\n"
-            "• `/split <amount> <people>` — Restaurant bill & tip splitter\n"
-            "• `/expense <amt> <cat> <desc>` — Log expense with analytics\n"
-            "• `/expenses` — Monthly finance summary & breakdown\n"
-            "• `/bill <name> <due> [amt]` — Add bill reminder alert\n\n"
-            "**🏥 Health, Fitness & Writing:**\n"
-            "• `/bmi <weight> <height>` — Body Mass Index & health category\n"
-            "• `/calorie <food>` — Nutrition, protein, carbs & calorie profile\n"
-            "• `/water [ml]` — Water hydration logging\n"
-            "• `/grammar <text>` — Grammar, tone polish & rewriter\n"
-            "• `/email <topic>` — Formal business & leave email drafter\n"
-            "• `/synonym <word>` — Thesaurus, synonyms & antonyms\n\n"
-            "**🎮 Entertainment & Media:**\n"
-            "• `/meme <top> | <bottom>` — Custom meme image generator\n"
-            "• `/anime <title>` — MyAnimeList anime & manga ratings\n"
-            "• `/recipe <dish>` — Cooking ingredients & instructions\n"
-            "• `/riddle` — Fun brain teaser riddles\n"
-            "• `/pick <opt1, opt2>` — Random decision maker & `/dice`, `/coinflip`\n\n"
-            "**📁 Document Engines, Resumes & Formats:**\n"
-            "• `/resume <role_or_skills>` — Professional ATS Resume generator (.pdf)\n"
-            "• `/coverletter <company> <role>` — Formal Job Application Cover Letter (.pdf)\n"
-            "• `/convert <format> <file>` — Convert image/doc format (PNG, JPG, WebP, PDF, TXT, Word)\n"
-            "• `/pdf <title>` — Styled PDF document engine\n"
-            "• `/excel <title>` — Styled Excel spreadsheet engine\n"
-            "• `/doc <title>` — Styled Word (.docx) memo engine\n"
-            "• `/gmail [query]` — Live Gmail reader\n"
-            "• `/outlook` — Live Outlook email reader\n"
-            "• `/drive [query]` — Google Drive search\n"
-            "• `/calendar` — Google Calendar schedule\n\n"
-            "💡 _Tip: You can tap the **[/] Menu** button next to your text bar to auto-complete any command!_"
-        )
-        return {"handled": True, "text": help_text}
+        from . import command_registry as reg
+        return {"handled": True, "text": reg.generate_help_text(user_id=str(user_id))}
 
 
     # 2. /weather <city>
@@ -1099,9 +990,20 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
 
     # 128. /compress <file_path> (Media & Document Compressor)
     elif cmd in ["/compress", "/reduce", "/shrink"]:
-        if not args_str:
-            return {"handled": True, "text": "🗜️ **Compressor Usage:** `/compress <file_path>` (Supports JPG, PNG, WebP, PDF)"}
-        success, text, out_f = superpack.compress_media_file(args_str)
+        target_file = None
+        if args_str:
+            target_file = args_str.split()[0]
+        elif attachment_path and os.path.exists(attachment_path):
+            target_file = attachment_path
+        else:
+            target_file = get_last_user_media(user_id)
+
+        if not target_file:
+            return {
+                "handled": True,
+                "text": "🗜️ **Compressor Usage:** `/compress <file_path>` (or upload a photo/PDF with `/compress` caption)\nSupports JPG, PNG, WebP, PDF."
+            }
+        success, text, out_f = superpack.compress_media_file(target_file)
         if success and out_f:
             ftype = "photo" if out_f.endswith((".jpg", ".png", ".webp")) else "document"
             return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
@@ -1109,12 +1011,39 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
 
     # Image Tools Module Slash Commands
     elif cmd in ["/imagetools", "/imagehelp", "/phototools", "/presets", "/imagepresets", "/passport", "/visa"]:
-        if img_bridge:
-            handled, text, out_f, ftype = img_bridge.handle_image_tool_command(cmd, args_str)
-            if handled:
-                if out_f:
-                    return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
-                return {"handled": True, "text": text}
+        if cmd in ["/passport", "/visa"]:
+            parts = args_str.split()
+            target_file = None
+            preset_choice = "india"
+
+            if parts and os.path.exists(parts[0]):
+                target_file = parts[0]
+                preset_choice = parts[1].lower() if len(parts) > 1 else "india"
+            elif parts and not os.path.exists(parts[0]):
+                preset_choice = parts[0].lower()
+                target_file = attachment_path or get_last_user_media(user_id)
+            else:
+                target_file = attachment_path or get_last_user_media(user_id)
+
+            if not target_file:
+                return {
+                    "handled": True,
+                    "text": "🪪 **Passport & Visa Photo Maker Usage:** `/passport <file_path> [india|us|uk|schengen]`\n_Tip: You can also send a photo with caption `/passport india`!_"
+                }
+
+            if img_bridge:
+                handled, text, out_f, ftype = img_bridge.handle_image_tool_command(cmd, f"{target_file} {preset_choice}")
+                if handled:
+                    if out_f:
+                        return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
+                    return {"handled": True, "text": text}
+        else:
+            if img_bridge:
+                handled, text, out_f, ftype = img_bridge.handle_image_tool_command(cmd, args_str)
+                if handled:
+                    if out_f:
+                        return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
+                    return {"handled": True, "text": text}
 
 
     # 129. /postoffice <pincode_or_area> (India Post Branch Finder)
@@ -1168,8 +1097,14 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
 
     # 135. /solve <question_or_photo> (Universal AI Question & Exam Problem Solver)
     elif cmd in ["/solve", "/ask", "/answer", "/mathsolve", "/homework", "/doubt"]:
-        if not args_str:
+        target_item = args_str or attachment_path or get_last_user_media(user_id)
+        if not target_item:
             return {"handled": True, "text": "🎓 **Universal AI Problem Solver Usage:**\n• `/solve <question text>`\n• `/solve <image_url_or_file>`\n_Or send a photo of any math, physics, coding or exam question directly in chat!_"}
-        return {"handled": True, "text": superpack.solve_question_or_problem(args_str)}
+        return {"handled": True, "text": superpack.solve_question_or_problem(target_item)}
 
-    return {"handled": False}
+    # Fallback for unrecognized slash commands
+    clean_cmd_name = cmd.lstrip("/")
+    return {
+        "handled": True,
+        "text": f"❓ **Unknown Command:** `/{clean_cmd_name}` is not recognized.\nUse `/help` or `/menu` to see all available commands."
+    }

@@ -343,127 +343,18 @@ class SmartTelegramInput(TelegramInput):
 
     def _register_telegram_commands(self) -> None:
         """Registers the native Telegram commands menu (the [/] button next to chat input)."""
-        commands = [
-            {"command": "help", "description": "📖 List all commands & skills"},
-            {"command": "adduser", "description": "👤 Grant bot access to Telegram user ID"},
-            {"command": "removeuser", "description": "🚫 Revoke bot access for Telegram user ID"},
-            {"command": "users", "description": "📋 List all authorized users"},
-            {"command": "solve", "description": "🎓 AI Question & Exam Problem Solver (Photo/Text)"},
-            {"command": "compare", "description": "⚔️ Side-by-side AI Product & Specs Comparator"},
-            {"command": "wayback", "description": "⏳ Wayback Machine website history snapshot"},
-            {"command": "mergepdf", "description": "📄 Merge multiple PDF files into one"},
-            {"command": "splitpdf", "description": "📄 Extract page ranges from PDF document"},
-            {"command": "voice", "description": "🎙️ Realistic Neural Voice Note generator"},
-            {"command": "aqi", "description": "💨 Real-time Air Quality Index & Health Advice"},
-            {"command": "exif", "description": "📷 Photo EXIF inspector & GPS location"},
-            {"command": "ipo", "description": "📈 Live Indian IPO Calendar & GMP"},
-            {"command": "phish", "description": "🛡️ Anti-phishing link & domain scanner"},
-            {"command": "compress", "description": "🗜️ Image & PDF file compressor"},
-            {"command": "postoffice", "description": "📮 India Post office branch finder"},
-            {"command": "ping", "description": "🏓 Server uptime & TCP latency ping"},
-            {"command": "search", "description": "🔍 Real-time live AI Web Search"},
-            {"command": "upi", "description": "💸 Instant dynamic UPI payment QR code"},
-            {"command": "transcribe", "description": "🎙️ Audio & voice note transcription (Whisper)"},
-            {"command": "med", "description": "💊 Clinical medicine uses & alternatives"},
-            {"command": "ssl", "description": "🔒 SSL certificate validity & expiry check"},
-            {"command": "whois", "description": "🌐 Domain registration & WHOIS lookup"},
-            {"command": "ocr", "description": "📷 Extract text from photo/image"},
-            {"command": "today", "description": "📜 Today in History milestones & birthdays"},
-            {"command": "pan", "description": "💳 Indian PAN Card structure validator"},
-            {"command": "gstin", "description": "🏢 Indian GSTIN number & state validator"},
-            {"command": "unit", "description": "📐 Universal & Land unit converter (Bigha/Acre)"},
-            {"command": "horoscope", "description": "🔮 Daily Zodiac & Horoscope guidance"},
-            {"command": "hackernews", "description": "🔥 Hacker News top tech & startup stories"},
-            {"command": "slang", "description": "🗣️ Gen-Z slangs & jargon decoder"},
-            {"command": "weather", "description": "🌤️ Real-time weather lookup"},
-            {"command": "news", "description": "🗞️ Latest news digest & headlines"},
-            {"command": "stock", "description": "📈 Live Stock quote (NSE/BSE)"},
-            {"command": "crypto", "description": "🪙 Live crypto prices (BTC/ETH/SOL)"},
-            {"command": "gold", "description": "🪙 Live Gold & Silver rates (India)"},
-            {"command": "fuel", "description": "⛽ Daily Petrol & Diesel rates"},
-            {"command": "currency", "description": "💱 Currency exchange conversion"},
-            {"command": "wallet", "description": "💎 Crypto wallet balance in USD & INR"},
-            {"command": "pnr", "description": "🚆 IRCTC PNR booking status"},
-            {"command": "train", "description": "🚆 Live train status & schedule"},
-            {"command": "flight", "description": "✈️ Live flight tracker & radar"},
-            {"command": "youtube", "description": "🎬 YouTube video AI summary"},
-            {"command": "summarize", "description": "📄 Webpage & article summary"},
-            {"command": "briefing", "description": "🌅 Daily Morning AI Briefing"},
-            {"command": "screenshot", "description": "📸 Live website screenshot"},
-            {"command": "py", "description": "🐍 Python code sandbox runner"},
-            {"command": "sql", "description": "🗄️ SQLite database query explorer"},
-            {"command": "github", "description": "🐙 GitHub repos, issues, PRs"},
-            {"command": "code", "description": "💻 Delegate coding via OpenCode"},
-            {"command": "pdf", "description": "📄 Generate styled PDF document"},
-            {"command": "excel", "description": "📊 Generate Excel spreadsheet"},
-            {"command": "doc", "description": "📝 Generate Word (.docx) doc"},
-            {"command": "resume", "description": "📄 ATS Resume PDF generator"},
-            {"command": "coverletter", "description": "✉️ Job Cover Letter PDF"},
-            {"command": "convert", "description": "🔄 Image & document converter"},
-            {"command": "remind", "description": "⏰ Set time-based reminder"},
-            {"command": "note", "description": "📝 Save a note"},
-            {"command": "notes", "description": "📋 List saved notes"},
-            {"command": "todo", "description": "✅ Add task to to-do list"},
-            {"command": "todos", "description": "📌 List pending to-dos"},
-            {"command": "expense", "description": "💰 Log expense with category"},
-            {"command": "expenses", "description": "📊 Monthly finance summary"},
-            {"command": "bill", "description": "🧾 Add bill payment reminder"},
-            {"command": "sip", "description": "📈 Mutual Fund SIP calculator"},
-            {"command": "emi", "description": "🏦 Loan EMI calculator"},
-            {"command": "split", "description": "🧾 Bill & tip splitter"},
-            {"command": "traffic", "description": "🚗 Commute ETA & route"},
-            {"command": "pincode", "description": "📮 India Post PIN code & area"},
-            {"command": "ifsc", "description": "🏦 Bank branch & IFSC finder"},
-            {"command": "serverstatus", "description": "🖥️ EC2 CPU/RAM/Disk health"},
-            {"command": "speedtest", "description": "⚡ Internet speed test"},
-            {"command": "gmail", "description": "📬 Read recent Gmail messages"},
-            {"command": "outlook", "description": "📧 Read recent Outlook emails"},
-            {"command": "drive", "description": "📂 Search Google Drive files"},
-            {"command": "calendar", "description": "📅 View Google Calendar events"},
-            {"command": "dns", "description": "🌐 DNS records lookup"},
-            {"command": "http", "description": "🔌 HTTP status & latency tester"},
-            {"command": "cron", "description": "⏰ Translate cron expression"},
-            {"command": "json", "description": "📋 Format & validate JSON"},
-            {"command": "ip", "description": "🌍 Geo-IP location & ISP lookup"},
-            {"command": "passgen", "description": "🔐 Strong password generator"},
-            {"command": "hash", "description": "🔑 MD5/SHA-256 converter"},
-            {"command": "unshorten", "description": "🔍 Expand shortened URL"},
-            {"command": "shorten", "description": "🔗 Create short TinyURL link"},
-            {"command": "tempmail", "description": "📬 Generate temporary disposable email"},
-            {"command": "checkmail", "description": "📩 Check temporary inbox / OTP"},
-            {"command": "breach", "description": "🚨 Check email/password breaches"},
-            {"command": "bmi", "description": "🟢 BMI health assessment"},
-            {"command": "calorie", "description": "🥗 Nutrition & calorie breakdown"},
-            {"command": "water", "description": "💧 Water hydration logger"},
-            {"command": "grammar", "description": "✍️ AI Grammar & tone polish"},
-            {"command": "email", "description": "✉️ Professional email drafter"},
-            {"command": "synonym", "description": "📖 Thesaurus & synonyms"},
-            {"command": "time", "description": "🕒 World clock & timezone"},
-            {"command": "countdown", "description": "⏳ Event countdown tracker"},
-            {"command": "qr", "description": "🏁 Generate QR code image"},
-            {"command": "barcode", "description": "🏷️ Generate barcode image"},
-            {"command": "meme", "description": "🎭 Custom meme image generator"},
-            {"command": "anime", "description": "🎬 MyAnimeList anime finder"},
-            {"command": "recipe", "description": "🍲 Cooking recipe finder"},
-            {"command": "riddle", "description": "🧩 Brain teaser riddle"},
-            {"command": "pick", "description": "🎯 Random decision / dice / coin"},
-            {"command": "math", "description": "🔢 WolframAlpha & SymPy solver"},
-            {"command": "science", "description": "🚀 NASA Astronomy Picture of Day"},
-            {"command": "wiki", "description": "📚 Wikipedia encyclopedia search"},
-            {"command": "movie", "description": "🎬 Movie/TV IMDb ratings & plot"},
-            {"command": "holiday", "description": "🎉 Public holidays & festivals"},
-            {"command": "image", "description": "🖼️ Search HD stock images"},
-            {"command": "translate", "description": "🌐 Dictionary & translation"},
-            {"command": "joke", "description": "😂 Random joke & quote"}
-        ]
+        from actions import command_registry as reg
+        safe_commands = reg.get_native_bot_commands()
         try:
-            # Enforce Telegram 100 commands maximum constraint
-            safe_commands = commands[:100]
-
             # 1. Set commands for default and private chats
             url_set = f"https://api.telegram.org/bot{self.access_token}/setMyCommands"
-            requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "default"}}, timeout=10)
-            requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "all_private_chats"}}, timeout=10)
+            resp1 = requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "default"}}, timeout=10)
+            resp2 = requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "all_private_chats"}}, timeout=10)
+
+            if resp1.status_code == 200 and resp1.json().get("ok"):
+                logger.info(f"Successfully registered {len(safe_commands)} Telegram bot commands in native Menu & ChatMenuButton.")
+            else:
+                logger.warning(f"Telegram setMyCommands API response: {resp1.status_code} - {resp1.text}")
 
             # 2. Register for admin user chat scopes directly
             admin_env = os.getenv("ALLOWED_TELEGRAM_USER_ID", "") or os.getenv("ADMIN_TELEGRAM_USER_ID", "")
@@ -574,29 +465,30 @@ class SmartTelegramInput(TelegramInput):
                         if msg.from_user:
                             user_id = msg.from_user.id
 
-                        # Handle Voice Notes (Whisper transcription)
+                        saved_media_path = None
+                        raw_command_candidate = (msg.caption or msg.text or "").strip()
+
+                        # 1. Handle Audio & Voice Notes
                         if msg.voice or msg.audio:
                             v_obj = msg.voice or msg.audio
                             f_id = v_obj.file_id
                             ext = "oga" if msg.voice else "mp3"
                             saved_f = download_telegram_file(self.access_token, f_id, f"voice_{f_id[:10]}.{ext}")
+                            saved_media_path = saved_f
                             if saved_f:
                                 transcript = transcribe_audio_file(saved_f)
-                                if transcript:
-                                    text = transcript
-                                else:
-                                    text = "I sent a voice note, but transcription failed."
+                                text = transcript if transcript else "Voice message received."
                             else:
                                 text = "Voice message received."
 
-                        # Handle Document Attachments (PDF, Excel, Word)
+                        # 2. Handle Document Attachments (PDF, Excel, Word)
                         elif msg.document:
                             doc_obj = msg.document
                             doc_name = doc_obj.file_name or f"doc_{doc_obj.file_id[:8]}"
                             saved_doc = download_telegram_file(self.access_token, doc_obj.file_id, doc_name)
-                            caption = msg.caption or ""
+                            saved_media_path = saved_doc
+                            caption = (msg.caption or "").strip()
 
-                            # Extract document content preview
                             doc_preview = ""
                             if saved_doc:
                                 from actions import skills_documents as doc_skills
@@ -611,33 +503,15 @@ class SmartTelegramInput(TelegramInput):
 
                             text = f"User uploaded document '{doc_name}'.\n{doc_preview}\nCaption: {caption}".strip()
 
-                        # Handle Photos with Vision OCR / AI Analysis
+                        # 3. Handle Photos
                         elif msg.photo:
                             p_obj = msg.photo[-1]
                             p_name = f"photo_{p_obj.file_id[:10]}.jpg"
                             saved_img = download_telegram_file(self.access_token, p_obj.file_id, p_name)
+                            saved_media_path = saved_img
                             caption_text = (msg.caption or "").strip()
+
                             if saved_img:
-                                # Check if photo is an explicit problem/question to solve
-                                solve_triggers = ["/solve", "solve", "/ask", "answer", "solution", "doubt", "batao", "kya hoga", "kaise", "explain"]
-                                if any(t in caption_text.lower() for t in solve_triggers) or caption_text.endswith("?"):
-                                    from addons.telegram_ux import async_set_message_reaction, TelegramTypingScope
-                                    if msg.message_id:
-                                        asyncio.create_task(
-                                            async_set_message_reaction(
-                                                chat_id=msg.chat.id,
-                                                message_id=msg.message_id,
-                                                bot_token=self.access_token,
-                                                session=out_channel.session,
-                                            )
-                                        )
-                                    async with TelegramTypingScope(chat_id=msg.chat.id, bot_token=self.access_token, session=out_channel.session):
-                                        from actions import skills_super_pack as superpack
-                                        solution = superpack.solve_question_or_problem(saved_img)
-                                        await out_channel.send_text_message(msg.chat.id, solution)
-                                    return response.text("success")
-
-
                                 from actions import skills_content as content_skills
                                 vision_analysis = content_skills.analyze_image_vision(saved_img, caption_text)
                                 text = f"User uploaded a photo. Visual Analysis:\n{vision_analysis}\nCaption: {caption_text}".strip()
@@ -661,6 +535,14 @@ class SmartTelegramInput(TelegramInput):
 
                 sender_id = msg.chat.id
 
+                # Cache user media for subsequent commands
+                if saved_media_path:
+                    try:
+                        from actions import commands
+                        commands.set_last_user_media(str(user_id), saved_media_path)
+                    except Exception as e_cache:
+                        logger.debug(f"Could not cache user media: {e_cache}")
+
                 # 3. User Whitelist Check (BEFORE any NLU, Core, or Groq LLM processing)
                 from actions import db as app_db
                 if not app_db.is_user_authorized(str(user_id)):
@@ -669,37 +551,42 @@ class SmartTelegramInput(TelegramInput):
                         f"username={getattr(getattr(msg, 'from_user', None), 'username', 'unknown')}. "
                         f"Silently dropping message without invoking NLU/LLM."
                     )
-                    # Silently drop the message - return HTTP 200 OK so Telegram doesn't resend
                     return response.text("success")
 
-                # 3.2 Trigger Random Emoji Reaction to Incoming Message (Fire-and-forget, non-blocking)
+                # 3.2 Trigger Random Emoji Reaction to Incoming Message
                 from addons.telegram_ux import async_set_message_reaction, TelegramTypingScope
                 msg_id = getattr(msg, "message_id", None)
-                if msg_id and sender_id:
+                if msg_id and sender_id and not getattr(getattr(msg, "from_user", None), "is_bot", False):
                     try:
-                        asyncio.create_task(
-                            async_set_message_reaction(
-                                chat_id=sender_id,
-                                message_id=msg_id,
-                                bot_token=self.access_token,
-                                session=out_channel.session,
-                            )
+                        await async_set_message_reaction(
+                            chat_id=sender_id,
+                            message_id=msg_id,
+                            bot_token=self.access_token,
+                            session=out_channel.session,
                         )
                     except Exception as e_rxn:
-                        logger.debug(f"Could not queue message reaction: {e_rxn}")
+                        logger.warning(f"Telegram reaction failed on message {msg_id}: {e_rxn}")
 
                 # 3.3 Wrap Processing in Typing Scope (Immediate typing start + periodic refresh + guaranteed cleanup)
                 async with TelegramTypingScope(chat_id=sender_id, bot_token=self.access_token, session=out_channel.session):
-                    # 3.5 Direct Slash Command & Help Menu Dispatcher (Instant execution & file delivery)
-                    clean_t = text.strip() if text else ""
-                    is_slash = clean_t.startswith("/") and clean_t not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]
-                    is_help_word = clean_t.lower() in ["help", "menu", "commands", "start", "/help", "/menu", "/commands", "/start"]
+                    # 3.5 Priority Slash Command Interception (BEFORE any generic AI / LLM pipeline)
+                    clean_cmd_candidate = raw_command_candidate.strip() if raw_command_candidate else ""
+                    is_slash = clean_cmd_candidate.startswith("/") and clean_cmd_candidate not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]
+                    is_help_word = clean_cmd_candidate.lower() in [
+                        "help", "menu", "commands", "start", "allcommands", "skills", "directory",
+                        "/help", "/menu", "/commands", "/start", "/allcommands", "/skills", "/directory"
+                    ]
 
-                    if clean_t and (is_slash or is_help_word):
+                    if clean_cmd_candidate and (is_slash or is_help_word):
                         try:
                             from actions import commands
-                            cmd_to_run = clean_t if clean_t.startswith("/") else f"/{clean_t.lower()}"
-                            cmd_res = commands.handle_slash_command(cmd_to_run, str(user_id), str(sender_id))
+                            cmd_to_run = clean_cmd_candidate if clean_cmd_candidate.startswith("/") else f"/{clean_cmd_candidate.lower()}"
+                            cmd_res = commands.handle_slash_command(
+                                cmd_to_run,
+                                str(user_id),
+                                str(sender_id),
+                                attachment_path=saved_media_path
+                            )
                             if cmd_res.get("handled"):
                                 reply_text = cmd_res.get("text", "")
                                 file_path = cmd_res.get("file_path")
@@ -711,11 +598,14 @@ class SmartTelegramInput(TelegramInput):
                                 elif reply_text:
                                     await out_channel.send_text_message(sender_id, reply_text)
 
+                                # Guaranteed return: NEVER pass recognized or unrecognized slash commands to generic AI
                                 return response.text("success")
                         except Exception as e:
                             logger.error(f"Error handling direct command: {e}", exc_info=True)
+                            await out_channel.send_text_message(sender_id, f"❌ Error executing command: {e}")
+                            return response.text("success")
 
-                    # 4. Dispatch Authorized Message to Rasa
+                    # 4. Dispatch Normal Conversational Message to Rasa AI Pipeline
                     metadata = self.get_metadata(request) or {}
                     metadata["chat_id"] = str(sender_id)
                     metadata["user_id"] = str(user_id)

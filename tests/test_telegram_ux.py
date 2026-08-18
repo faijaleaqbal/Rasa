@@ -199,6 +199,45 @@ class TestSyncTelegramUX(unittest.TestCase):
             self.assertIsNone(scope._thread)
             self.assertGreaterEqual(mock_post.call_count, 2)
 
+    def test_sync_reaction_success_and_fallback(self):
+        with patch("addons.telegram_ux.requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.text = '{"ok": true, "result": true}'
+            mock_post.return_value = mock_resp
+
+            res = sync_set_message_reaction(chat_id="12345", message_id=303, emoji="👍")
+            self.assertEqual(res, "👍")
+            self.assertEqual(mock_post.call_count, 1)
+
+    def test_sync_reaction_fallback_on_invalid_emoji(self):
+        with patch("addons.telegram_ux.requests.post") as mock_post:
+            # First attempt fails with REACTION_INVALID, second attempt (fallback) succeeds
+            fail_resp = MagicMock()
+            fail_resp.status_code = 400
+            fail_resp.text = '{"ok": false, "description": "Bad Request: REACTION_INVALID"}'
+
+            ok_resp = MagicMock()
+            ok_resp.status_code = 200
+            ok_resp.text = '{"ok": true, "result": true}'
+
+            mock_post.side_effect = [fail_resp, ok_resp]
+
+            res = sync_set_message_reaction(chat_id="12345", message_id=304, emoji="🔥")
+            self.assertIsNotNone(res)
+            self.assertGreaterEqual(mock_post.call_count, 2)
+
+    def test_sync_reaction_permission_denied(self):
+        with patch("addons.telegram_ux.requests.post") as mock_post:
+            fail_resp = MagicMock()
+            fail_resp.status_code = 403
+            fail_resp.text = '{"ok": false, "description": "Forbidden: bot was blocked by the user"}'
+            mock_post.return_value = fail_resp
+
+            res = sync_set_message_reaction(chat_id="12345", message_id=305)
+            self.assertIsNone(res)
+
 
 if __name__ == "__main__":
     unittest.main()
+
