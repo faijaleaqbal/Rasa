@@ -553,3 +553,217 @@ def ping_server_health(host_or_url: str) -> str:
             )
     except Exception as e:
         return f"🔴 **Host Unreachable:** Could not resolve or ping `{clean_host}` ({str(e)})."
+
+
+# ---------------------------------------------------------------------------
+# 9. 🌐 Wayback Machine (Internet Archive Time Machine)
+# ---------------------------------------------------------------------------
+def get_wayback_snapshots(target_url: str) -> str:
+    """
+    Looks up archived historical snapshots of any webpage via Wayback Machine.
+    """
+    clean_url = target_url.strip()
+    if not clean_url:
+        return "🌐 Usage: `/wayback <url>` (e.g. `/wayback https://apple.com` or `/wayback https://google.com`)"
+
+    if not clean_url.startswith("http://") and not clean_url.startswith("https://"):
+        clean_url = "https://" + clean_url
+
+    try:
+        api_url = f"https://archive.org/wayback/available?url={urllib.parse.quote(clean_url)}"
+        resp = requests.get(api_url, timeout=10)
+        data = resp.json()
+        snapshots = data.get("archived_snapshots", {})
+
+        if not snapshots or not snapshots.get("closest"):
+            return f"ℹ️ No Wayback Machine archived snapshots found for `{clean_url}`. The URL might be very new or never archived."
+
+        closest = snapshots["closest"]
+        timestamp = closest.get("timestamp", "")
+        formatted_date = "N/A"
+        if len(timestamp) >= 8:
+            try:
+                dt = datetime.strptime(timestamp[:14], "%Y%m%d%H%M%S" if len(timestamp) >= 14 else "%Y%m%d")
+                formatted_date = dt.strftime("%B %d, %Y (%I:%M %p UTC)")
+            except Exception:
+                formatted_date = timestamp
+
+        archive_url = closest.get("url", "")
+        status_code = closest.get("status", "200")
+
+        return (
+            f"⏳ **Internet Archive Wayback Machine Record:**\n\n"
+            f"• **Original URL:** `{clean_url}`\n"
+            f"• **Closest Snapshot Date:** `{formatted_date}`\n"
+            f"• **Archived HTTP Status:** `{status_code}`\n"
+            f"• **🌐 View Snapshot:** [Open Historical Archive]({archive_url})\n\n"
+            f"💡 _Tip: You can see how this website looked in the past even if it is currently deleted or down._"
+        )
+    except Exception as e:
+        logger.error(f"Wayback lookup error: {e}")
+        return f"❌ Wayback Machine lookup failed: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# 10. 📄 PDF Toolkit: Merge & Split PDFs
+# ---------------------------------------------------------------------------
+def merge_pdf_documents(pdf_paths: List[str]) -> Tuple[bool, str, Optional[str]]:
+    """
+    Merges multiple PDF files into a single unified PDF.
+    Returns: (success, result_message, output_pdf_path)
+    """
+    valid_paths = [p.strip() for p in pdf_paths if p.strip() and os.path.exists(p.strip())]
+    if len(valid_paths) < 2:
+        return False, "⚠️ Please provide at least 2 valid PDF file paths to merge (e.g. `/mergepdf file1.pdf file2.pdf`).", None
+
+    try:
+        writer = pypdf.PdfWriter()
+        total_pages = 0
+        for p in valid_paths:
+            reader = pypdf.PdfReader(p)
+            for page in reader.pages:
+                writer.add_page(page)
+                total_pages += 1
+
+        out_path = os.path.join(TEMP_MEDIA_DIR, f"merged_{int(time.time()*1000)}.pdf")
+        with open(out_path, "wb") as f:
+            writer.write(f)
+
+        return True, f"📄 **PDFs Merged Successfully!**\n• Combined `{len(valid_paths)}` documents into `{total_pages}` total pages.", out_path
+    except Exception as e:
+        logger.error(f"PDF merge error: {e}")
+        return False, f"❌ PDF Merge Failed: {str(e)}", None
+
+
+def split_pdf_document(pdf_path: str, start_page: int, end_page: int) -> Tuple[bool, str, Optional[str]]:
+    """
+    Extracts a range of pages from a PDF document.
+    Returns: (success, result_message, output_pdf_path)
+    """
+    clean_path = pdf_path.strip()
+    if not os.path.exists(clean_path):
+        return False, f"❌ PDF file not found at `{clean_path}`.", None
+
+    try:
+        reader = pypdf.PdfReader(clean_path)
+        total_pages = len(reader.pages)
+
+        if start_page < 1 or end_page > total_pages or start_page > end_page:
+            return False, f"⚠️ Invalid page range. Document has `{total_pages}` pages. Please specify range between 1 and {total_pages}.", None
+
+        writer = pypdf.PdfWriter()
+        for p_num in range(start_page - 1, end_page):
+            writer.add_page(reader.pages[p_num])
+
+        out_path = os.path.join(TEMP_MEDIA_DIR, f"split_{start_page}_to_{end_page}_{int(time.time()*1000)}.pdf")
+        with open(out_path, "wb") as f:
+            writer.write(f)
+
+        return True, f"📄 **PDF Pages Extracted!**\n• Extracted pages `{start_page}` to `{end_page}` from `{os.path.basename(clean_path)}`.", out_path
+    except Exception as e:
+        logger.error(f"PDF split error: {e}")
+        return False, f"❌ PDF Split Failed: {str(e)}", None
+
+
+# ---------------------------------------------------------------------------
+# 11. 🔍 AI Product & Tech Comparator
+# ---------------------------------------------------------------------------
+def compare_items_ai(comparison_query: str) -> str:
+    """
+    Generates a structured, unbiased side-by-side comparison between two products,
+    phones, gadgets, programming languages, or technologies.
+    """
+    clean_q = comparison_query.strip()
+    if not clean_q:
+        return "Usage: `/compare <Item1> vs <Item2>` (e.g. `/compare iPhone 15 vs Samsung S24` or `/compare Python vs Rust`)"
+
+    try:
+        from .llm_provider import LLMProviderManager
+        prompt = (
+            f"You are an expert product analyst and technology reviewer. "
+            f"Perform a comprehensive, fair, side-by-side comparison for: '{clean_q}'.\n\n"
+            f"Structure your response strictly as follows:\n"
+            f"1. 📊 **Overview & Key Differences** (2-3 crisp sentences)\n"
+            f"2. ⚔️ **Comparison Breakdown Matrix**:\n"
+            f"   - Performance & Specs\n"
+            f"   - Design & Build Quality\n"
+            f"   - Battery / Efficiency / Features\n"
+            f"   - Pricing & Value for Money\n"
+            f"3. 🏆 **Pros & Cons Snapshot** (Bullet points for both)\n"
+            f"4. 🎯 **Final Verdict & Recommendation** (Which one should the user buy/pick based on their use case).\n"
+            f"Keep language natural, modern, and engaging with bold headers and emojis."
+        )
+
+        messages = [
+            {"role": "system", "content": "You are a professional product and technology analyst."},
+            {"role": "user", "content": prompt}
+        ]
+
+        content, _, _ = LLMProviderManager.call_chat_completion(
+            messages=messages,
+            temperature=0.6,
+            max_tokens=800
+        )
+        return content or "⚠️ Could not generate comparison at this moment."
+    except Exception as e:
+        logger.error(f"Error in compare_items_ai: {e}")
+        return f"❌ Comparison failed: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# 12. 🎓 AI Visual & Text Problem / Question Solver (Any Question / Photo)
+# ---------------------------------------------------------------------------
+def solve_question_or_problem(query_or_file_path: str) -> str:
+    """
+    Universal AI Problem Solver:
+    - Accepts text question OR photo/receipt/exam paper.
+    - If photo/image: runs OCR to extract formulas, questions, and text.
+    - Solves with step-by-step reasoning, mathematical proof, and final answer.
+    """
+    clean_input = query_or_file_path.strip()
+    if not clean_input:
+        return "Usage: `/solve <your question or photo URL>` (e.g. `/solve Find derivative of x^2 * sin(x)` or send a photo of your question!)"
+
+    question_text = clean_input
+    is_image = clean_input.startswith(("http://", "https://")) or os.path.exists(clean_input) or clean_input.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+
+    if is_image:
+        try:
+            from .skills_advanced import extract_ocr_text
+            ocr_res = extract_ocr_text(clean_input)
+            if ocr_res and "Image text extraction failed" not in ocr_res and len(ocr_res.strip()) > 5:
+                question_text = ocr_res.strip()
+            else:
+                return "⚠️ Could not clearly read the text in this photo. Please make sure the question is well-lit and in focus."
+        except Exception as ex:
+            logger.warning(f"OCR extraction failed before solving: {ex}")
+
+    try:
+        from .llm_provider import LLMProviderManager
+        system_prompt = (
+            "You are Alya's Master Problem Solving AI — an elite multi-discipline tutor and academic genius. "
+            "You can solve ANY question across Mathematics (Calculus, Algebra, Geometry, Probability), "
+            "Physics, Chemistry, Biology, Computer Science/Coding, Economics, History, Reasoning, General Knowledge, and MCQs.\n\n"
+            "Formatting Rules:\n"
+            "1. 🎯 **Question Identified**: Restate the core problem clearly.\n"
+            "2. 💡 **Step-by-Step Solution**: Show full logical steps, formulas, and derivations.\n"
+            "3. 📌 **Final Answer**: Clearly highlight the final result or correct MCQ option.\n"
+            "4. 🧠 **Key Concept / Tip**: Brief 1-line concept explanation for quick understanding.\n"
+            "Tone: Clear, encouraging, structured, using LaTeX/Unicode math symbols where helpful."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Please solve this question thoroughly:\n\n{question_text}"}
+        ]
+
+        solution, _, _ = LLMProviderManager.call_chat_completion(
+            messages=messages,
+            temperature=0.4,
+            max_tokens=950
+        )
+        return solution or "⚠️ Could not solve this question. Please check the wording and try again."
+    except Exception as e:
+        logger.error(f"Error solving problem: {e}")
+        return f"❌ Problem Solving Error: {str(e)}"
+

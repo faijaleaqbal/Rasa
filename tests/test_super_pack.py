@@ -81,6 +81,18 @@ class TestSuperPackSkills(unittest.TestCase):
         self.assertTrue(res_post["handled"])
         self.assertIn("India Post", res_post["text"])
 
+        res_wayback = handle_slash_command("/wayback https://google.com", "user_1", "chat_1")
+        self.assertTrue(res_wayback["handled"])
+        self.assertIn("Wayback Machine", res_wayback["text"])
+
+        res_compare = handle_slash_command("/compare Python vs Java", "user_1", "chat_1")
+        self.assertTrue(res_compare["handled"])
+        self.assertTrue(len(res_compare["text"]) > 20)
+
+        res_solve = handle_slash_command("/solve What is the derivative of x^2?", "user_1", "chat_1")
+        self.assertTrue(res_solve["handled"])
+        self.assertIn("2x", res_solve["text"])
+
 
 if __name__ == "__main__":
     unittest.main()

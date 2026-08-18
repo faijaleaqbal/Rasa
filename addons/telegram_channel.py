@@ -348,6 +348,11 @@ class SmartTelegramInput(TelegramInput):
             {"command": "adduser", "description": "👤 Grant bot access to Telegram user ID"},
             {"command": "removeuser", "description": "🚫 Revoke bot access for Telegram user ID"},
             {"command": "users", "description": "📋 List all authorized users"},
+            {"command": "solve", "description": "🎓 AI Question & Exam Problem Solver (Photo/Text)"},
+            {"command": "compare", "description": "⚔️ Side-by-side AI Product & Specs Comparator"},
+            {"command": "wayback", "description": "⏳ Wayback Machine website history snapshot"},
+            {"command": "mergepdf", "description": "📄 Merge multiple PDF files into one"},
+            {"command": "splitpdf", "description": "📄 Extract page ranges from PDF document"},
             {"command": "voice", "description": "🎙️ Realistic Neural Voice Note generator"},
             {"command": "aqi", "description": "💨 Real-time Air Quality Index & Health Advice"},
             {"command": "exif", "description": "📷 Photo EXIF inspector & GPS location"},
@@ -611,8 +616,16 @@ class SmartTelegramInput(TelegramInput):
                             p_obj = msg.photo[-1]
                             p_name = f"photo_{p_obj.file_id[:10]}.jpg"
                             saved_img = download_telegram_file(self.access_token, p_obj.file_id, p_name)
-                            caption_text = msg.caption or ""
+                            caption_text = (msg.caption or "").strip()
                             if saved_img:
+                                # Check if photo is an explicit problem/question to solve
+                                solve_triggers = ["/solve", "solve", "/ask", "answer", "solution", "doubt", "batao", "kya hoga", "kaise", "explain"]
+                                if any(t in caption_text.lower() for t in solve_triggers) or caption_text.endswith("?"):
+                                    from actions import skills_super_pack as superpack
+                                    solution = superpack.solve_question_or_problem(saved_img)
+                                    await out_channel.send_text_message(msg.chat.id, solution)
+                                    return response.text("success")
+
                                 from actions import skills_content as content_skills
                                 vision_analysis = content_skills.analyze_image_vision(saved_img, caption_text)
                                 text = f"User uploaded a photo. Visual Analysis:\n{vision_analysis}\nCaption: {caption_text}".strip()

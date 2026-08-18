@@ -72,7 +72,11 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/phish <url>` — Anti-phishing, fake bank trap & link safety scanner\n"
             "• `/compress <file>` — Smart photo & PDF file compressor\n"
             "• `/postoffice <pin_or_area>` — India Post office branch finder & delivery status\n"
-            "• `/ping <host>` — Server uptime & TCP latency ping\n\n"
+            "• `/ping <host>` — Server uptime & TCP latency ping\n"
+            "• `/solve <question_or_photo>` — AI Question & Exam Problem Solver from photo or text\n"
+            "• `/compare <item1> vs <item2>` — Side-by-side AI specs, pros/cons & tech comparison\n"
+            "• `/wayback <url>` — Wayback Machine historical snapshots & deleted page viewer\n"
+            "• `/mergepdf <files>` & `/splitpdf` — Merge multiple PDFs or extract page ranges\n\n"
             "**🌤️ Real-Time Free APIs:**\n"
             "• `/weather <city>` — Live weather (Default: Malda, WB)\n"
             "• `/news [topic]` — Top headlines (English)\n"
@@ -1064,5 +1068,48 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         if not args_str:
             return {"handled": True, "text": "🏓 **Host Ping Usage:** `/ping <domain_or_ip>` (e.g. `/ping google.com`)"}
         return {"handled": True, "text": superpack.ping_server_health(args_str)}
+
+    # 131. /wayback <url> (Internet Archive Time Machine)
+    elif cmd in ["/wayback", "/archive", "/timemachine", "/oldweb"]:
+        if not args_str:
+            return {"handled": True, "text": "🌐 **Wayback Machine Usage:** `/wayback <url>` (e.g. `/wayback https://apple.com`)"}
+        return {"handled": True, "text": superpack.get_wayback_snapshots(args_str)}
+
+    # 132. /mergepdf <file1> <file2> (Merge PDF files)
+    elif cmd in ["/mergepdf", "/pdfmerge", "/combinepdf"]:
+        paths = args_str.split()
+        if len(paths) < 2:
+            return {"handled": True, "text": "📄 **Merge PDF Usage:** `/mergepdf <file1.pdf> <file2.pdf> ...`"}
+        success, msg, out_f = superpack.merge_pdf_documents(paths)
+        if success and out_f:
+            return {"handled": True, "text": msg, "file_path": out_f, "file_type": "document"}
+        return {"handled": True, "text": msg}
+
+    # 133. /splitpdf <file> <start> <end> (Extract PDF pages)
+    elif cmd in ["/splitpdf", "/pdfsplit", "/extractpdf"]:
+        tokens = args_str.split()
+        if len(tokens) < 3:
+            return {"handled": True, "text": "📄 **Split PDF Usage:** `/splitpdf <file_path> <start_page> <end_page>` (e.g. `/splitpdf doc.pdf 1 5`)"}
+        try:
+            sp = int(tokens[1])
+            ep = int(tokens[2])
+            success, msg, out_f = superpack.split_pdf_document(tokens[0], sp, ep)
+            if success and out_f:
+                return {"handled": True, "text": msg, "file_path": out_f, "file_type": "document"}
+            return {"handled": True, "text": msg}
+        except ValueError:
+            return {"handled": True, "text": "❌ Page numbers must be integers (e.g. `/splitpdf doc.pdf 1 5`)."}
+
+    # 134. /compare <item1> vs <item2> (AI Product / Tech Comparator)
+    elif cmd in ["/compare", "/vs", "/diff", "/difference"]:
+        if not args_str:
+            return {"handled": True, "text": "⚔️ **AI Comparison Usage:** `/compare <Item1> vs <Item2>` (e.g. `/compare iPhone 15 vs S24` or `/compare Python vs Rust`)"}
+        return {"handled": True, "text": superpack.compare_items_ai(args_str)}
+
+    # 135. /solve <question_or_photo> (Universal AI Question & Exam Problem Solver)
+    elif cmd in ["/solve", "/ask", "/answer", "/mathsolve", "/homework", "/doubt"]:
+        if not args_str:
+            return {"handled": True, "text": "🎓 **Universal AI Problem Solver Usage:**\n• `/solve <question text>`\n• `/solve <image_url_or_file>`\n_Or send a photo of any math, physics, coding or exam question directly in chat!_"}
+        return {"handled": True, "text": superpack.solve_question_or_problem(args_str)}
 
     return {"handled": False}
