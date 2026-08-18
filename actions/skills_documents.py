@@ -32,6 +32,9 @@ def send_telegram_file(chat_id: str, file_path: str, caption: Optional[str] = No
         elif file_type == "voice" or file_path.lower().endswith((".oga", ".ogg", ".opus")):
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendVoice"
             field_name = "voice"
+        elif file_type == "audio" or file_path.lower().endswith((".mp3", ".wav", ".m4a", ".flac")):
+            endpoint = f"https://api.telegram.org/bot{bot_token}/sendAudio"
+            field_name = "audio"
         else:
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendDocument"
             field_name = "document"

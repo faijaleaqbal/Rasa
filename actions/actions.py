@@ -29,6 +29,7 @@ from . import skills_converters_resume as conv
 from . import skills_mobile_device as mob
 from . import skills_android_controller as android
 from . import skills_advanced as adv
+from . import skills_super_pack as superpack
 from . import security_guardrails as security
 from . import mcp_client as mcp
 
@@ -1257,6 +1258,88 @@ LLM_TOOLS_SPEC = [
                 "required": ["audio_path_or_url"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_voice_note",
+            "description": "Generate a natural realistic voice note / audio speech from text.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "The text to convert to realistic speech"}
+                },
+                "required": ["text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_air_quality_index",
+            "description": "Get real-time live Air Quality Index (AQI), PM2.5, PM10, pollution level, and medical health advisory for any city.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string", "description": "City name (e.g. Delhi, Mumbai, Malda, Kolkata)"}
+                },
+                "required": ["city"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_live_ipos",
+            "description": "Get live, current, and upcoming Indian Stock Market IPOs, issue price, dates, and GMP Grey Market Premium.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_url_phishing",
+            "description": "Scan a URL or link for phishing, malware, fake bank traps, suspicious TLDs, and SSL risks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "The website URL to scan for phishing/security risks"}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_post_office_info",
+            "description": "Look up India Post branch offices, speed post delivery status, and circle by PIN code or area.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pincode_or_area": {"type": "string", "description": "6-digit Indian PIN code or area name"}
+                },
+                "required": ["pincode_or_area"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ping_host",
+            "description": "Test server or domain DNS resolution, TCP handshake latency, and uptime response.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "host": {"type": "string", "description": "Domain name or IP address to ping (e.g. google.com)"}
+                },
+                "required": ["host"]
+            }
+        }
     }
 ]
 
@@ -1476,6 +1559,19 @@ def execute_tool_call(tool_name: str, args: Dict[str, Any], user_id: str, chat_i
             return adv.extract_ocr_text(args.get("image_path_or_url", ""))
         elif tool_name == "transcribe_audio":
             return adv.transcribe_audio(args.get("audio_path_or_url", ""))
+        elif tool_name == "generate_voice_note":
+            ok, fpath, msg = superpack.generate_voice_note(args.get("text", ""))
+            return msg if ok else f"⚠️ Voice note creation failed: {msg}"
+        elif tool_name == "get_air_quality_index":
+            return superpack.get_air_quality_index(args.get("city", "Malda"))
+        elif tool_name == "get_live_ipos":
+            return superpack.get_live_ipo_data()
+        elif tool_name == "scan_url_phishing":
+            return superpack.scan_url_phishing_security(args.get("url", ""))
+        elif tool_name == "get_post_office_info":
+            return superpack.get_post_office_branches(args.get("pincode_or_area", ""))
+        elif tool_name == "ping_host":
+            return superpack.ping_server_health(args.get("host", ""))
 
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)

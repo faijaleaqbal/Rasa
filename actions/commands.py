@@ -17,6 +17,7 @@ from . import skills_converters_resume as conv
 from . import skills_mobile_device as mob
 from . import skills_android_controller as android
 from . import skills_advanced as adv
+from . import skills_super_pack as superpack
 from . import mcp_client as mcp
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,15 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/med <medicine>` — Clinical medicine uses, active salt, precautions & low-cost generic alternatives\n"
             "• `/ssl <domain>` — Real-time SSL certificate validity, expiry countdown & cipher check\n"
             "• `/whois <domain>` — ICANN RDAP domain registrar, registration & expiry lookup\n"
-            "• `/ocr [url_or_file]` — High-accuracy image-to-text extractor (Tesseract + AI polish)\n\n"
+            "• `/ocr [url_or_file]` — High-accuracy image-to-text extractor (Tesseract + AI polish)\n"
+            "• `/voice <text>` — Realistic Neural Voice Note generator (Edge-TTS Hindi/English)\n"
+            "• `/aqi [city]` — Real-time live Air Quality Index (PM2.5, PM10 & Health Advisory)\n"
+            "• `/exif <file>` & `/strip_exif` — Photo EXIF metadata inspector & GPS privacy stripper\n"
+            "• `/ipo` — Indian Mainboard & SME IPO Calendar & Grey Market Premium (GMP)\n"
+            "• `/phish <url>` — Anti-phishing, fake bank trap & link safety scanner\n"
+            "• `/compress <file>` — Smart photo & PDF file compressor\n"
+            "• `/postoffice <pin_or_area>` — India Post office branch finder & delivery status\n"
+            "• `/ping <host>` — Server uptime & TCP latency ping\n\n"
             "**🌤️ Real-Time Free APIs:**\n"
             "• `/weather <city>` — Live weather (Default: Malda, WB)\n"
             "• `/news [topic]` — Top headlines (English)\n"
@@ -992,5 +1001,68 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             lines.append("• _No additional users added yet. Use `/adduser <id>` to grant access._")
 
         return {"handled": True, "text": "\n".join(lines)}
+
+    # 122. /voice <text> or /tts <text> (Realistic Neural Voice Note)
+    elif cmd in ["/voice", "/tts", "/audio", "/voicenote"]:
+        if not args_str:
+            return {"handled": True, "text": "🎙️ **Voice Note Usage:** `/voice <text>` (e.g. `/voice Namaste! Alya bot me aapka swagat hai.`)"}
+        success, fpath, msg = superpack.generate_voice_note(args_str)
+        if success and fpath:
+            return {"handled": True, "text": msg, "file_path": fpath, "file_type": "audio"}
+        else:
+            return {"handled": True, "text": msg}
+
+    # 123. /aqi [city] (Air Quality Index)
+    elif cmd in ["/aqi", "/airquality", "/pollution"]:
+        city = args_str if args_str else "Malda"
+        return {"handled": True, "text": superpack.get_air_quality_index(city)}
+
+    # 124. /exif [url_or_file] (Photo EXIF Inspector)
+    elif cmd in ["/exif", "/metadata", "/photoinfo"]:
+        if not args_str:
+            return {"handled": True, "text": "📷 **EXIF Inspector Usage:** `/exif <image_url_or_file>` (Inspects camera, lens & GPS location)"}
+        success, text, _ = superpack.inspect_or_strip_image_exif(args_str, strip_exif=False)
+        return {"handled": True, "text": text}
+
+    # 125. /strip_exif [url_or_file] (Remove GPS/EXIF Privacy Stripper)
+    elif cmd in ["/strip_exif", "/stripexif", "/cleanphoto"]:
+        if not args_str:
+            return {"handled": True, "text": "🛡️ **Privacy EXIF Stripper Usage:** `/strip_exif <image_url_or_file>` (Removes all location & camera tags)"}
+        success, text, out_file = superpack.inspect_or_strip_image_exif(args_str, strip_exif=True)
+        if success and out_file:
+            return {"handled": True, "text": text, "file_path": out_file, "file_type": "photo"}
+        return {"handled": True, "text": text}
+
+    # 126. /ipo (Indian IPO Calendar & GMP)
+    elif cmd in ["/ipo", "/ipogmp", "/ipos"]:
+        return {"handled": True, "text": superpack.get_live_ipo_data()}
+
+    # 127. /phish <url> or /safelink <url> (Anti-Phishing Scanner)
+    elif cmd in ["/phish", "/safelink", "/urlcheck", "/scanlink"]:
+        if not args_str:
+            return {"handled": True, "text": "🛡️ **Anti-Phishing Scanner Usage:** `/phish <url>` (e.g. `/phish https://example.com`)"}
+        return {"handled": True, "text": superpack.scan_url_phishing_security(args_str)}
+
+    # 128. /compress <file_path> (Media & Document Compressor)
+    elif cmd in ["/compress", "/reduce", "/shrink"]:
+        if not args_str:
+            return {"handled": True, "text": "🗜️ **Compressor Usage:** `/compress <file_path>` (Supports JPG, PNG, WebP, PDF)"}
+        success, text, out_f = superpack.compress_media_file(args_str)
+        if success and out_f:
+            ftype = "photo" if out_f.endswith((".jpg", ".png", ".webp")) else "document"
+            return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
+        return {"handled": True, "text": text}
+
+    # 129. /postoffice <pincode_or_area> (India Post Branch Finder)
+    elif cmd in ["/postoffice", "/dak", "/postbranches"]:
+        if not args_str:
+            return {"handled": True, "text": "📮 **India Post Finder Usage:** `/postoffice <6-digit PIN or Area Name>` (e.g. `/postoffice 732101` or `/postoffice Kolkata`)"}
+        return {"handled": True, "text": superpack.get_post_office_branches(args_str)}
+
+    # 130. /ping <host> (Server & Latency Ping)
+    elif cmd in ["/ping", "/latency", "/hostping"]:
+        if not args_str:
+            return {"handled": True, "text": "🏓 **Host Ping Usage:** `/ping <domain_or_ip>` (e.g. `/ping google.com`)"}
+        return {"handled": True, "text": superpack.ping_server_health(args_str)}
 
     return {"handled": False}
