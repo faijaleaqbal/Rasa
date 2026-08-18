@@ -16,10 +16,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Default reaction emoji list
+# Default reaction emoji list (Expanded Telegram reaction set)
 DEFAULT_REACTION_EMOJIS = [
-    "👍", "❤️", "😂", "😎", "🔥", "👀", "🤖", "✨", "😊", "😁", "🙌", "💯", "🚀", "🫡", "👌"
+    "👍", "❤️", "🔥", "🥰", "👏", "😁", "🤔", "🎉", "🤩", "🙏",
+    "👌", "😍", "❤️‍🔥", "💯", "🤣", "⚡", "🏆", "🤓", "👻", "👀",
+    "🙈", "😇", "🤝", "✍️", "🤗", "🫡", "🤪", "🗿", "🆒", "💘",
+    "😘", "😎", "👾", "✨", "🚀", "💡", "💪", "🌟", "🎯", "🎊",
+    "🔮", "🪄", "🙌", "🤖", "💎", "🥳", "⚡️", "🔥", "💐", "🎈"
 ]
+
 
 # Track reacted messages to prevent duplicate reaction attempts for the same message
 _REACTED_MESSAGES_LOCK = threading.Lock()
