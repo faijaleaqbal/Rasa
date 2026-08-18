@@ -621,10 +621,22 @@ class SmartTelegramInput(TelegramInput):
                                 # Check if photo is an explicit problem/question to solve
                                 solve_triggers = ["/solve", "solve", "/ask", "answer", "solution", "doubt", "batao", "kya hoga", "kaise", "explain"]
                                 if any(t in caption_text.lower() for t in solve_triggers) or caption_text.endswith("?"):
-                                    from actions import skills_super_pack as superpack
-                                    solution = superpack.solve_question_or_problem(saved_img)
-                                    await out_channel.send_text_message(msg.chat.id, solution)
+                                    from addons.telegram_ux import async_set_message_reaction, TelegramTypingScope
+                                    if msg.message_id:
+                                        asyncio.create_task(
+                                            async_set_message_reaction(
+                                                chat_id=msg.chat.id,
+                                                message_id=msg.message_id,
+                                                bot_token=self.access_token,
+                                                session=out_channel.session,
+                                            )
+                                        )
+                                    async with TelegramTypingScope(chat_id=msg.chat.id, bot_token=self.access_token, session=out_channel.session):
+                                        from actions import skills_super_pack as superpack
+                                        solution = superpack.solve_question_or_problem(saved_img)
+                                        await out_channel.send_text_message(msg.chat.id, solution)
                                     return response.text("success")
+
 
                                 from actions import skills_content as content_skills
                                 vision_analysis = content_skills.analyze_image_vision(saved_img, caption_text)
@@ -660,72 +672,91 @@ class SmartTelegramInput(TelegramInput):
                     # Silently drop the message - return HTTP 200 OK so Telegram doesn't resend
                     return response.text("success")
 
-                # 3.5 Direct Slash Command & Help Menu Dispatcher (Instant execution & file delivery)
-                clean_t = text.strip() if text else ""
-                is_slash = clean_t.startswith("/") and clean_t not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]
-                is_help_word = clean_t.lower() in ["help", "menu", "commands", "start", "/help", "/menu", "/commands", "/start"]
-
-                if clean_t and (is_slash or is_help_word):
+                # 3.2 Trigger Random Emoji Reaction to Incoming Message (Fire-and-forget, non-blocking)
+                from addons.telegram_ux import async_set_message_reaction, TelegramTypingScope
+                msg_id = getattr(msg, "message_id", None)
+                if msg_id and sender_id:
                     try:
-                        from actions import commands
-                        cmd_to_run = clean_t if clean_t.startswith("/") else f"/{clean_t.lower()}"
-                        cmd_res = commands.handle_slash_command(cmd_to_run, str(user_id), str(sender_id))
-                        if cmd_res.get("handled"):
-                            reply_text = cmd_res.get("text", "")
-                            file_path = cmd_res.get("file_path")
-                            file_type = cmd_res.get("file_type", "document")
+                        asyncio.create_task(
+                            async_set_message_reaction(
+                                chat_id=sender_id,
+                                message_id=msg_id,
+                                bot_token=self.access_token,
+                                session=out_channel.session,
+                            )
+                        )
+                    except Exception as e_rxn:
+                        logger.debug(f"Could not queue message reaction: {e_rxn}")
 
-                            if file_path:
-                                from actions import skills_documents as doc_skills
-                                doc_skills.send_telegram_file(str(sender_id), file_path, caption=reply_text, file_type=file_type)
-                            elif reply_text:
-                                await out_channel.send_text_message(sender_id, reply_text)
+                # 3.3 Wrap Processing in Typing Scope (Immediate typing start + periodic refresh + guaranteed cleanup)
+                async with TelegramTypingScope(chat_id=sender_id, bot_token=self.access_token, session=out_channel.session):
+                    # 3.5 Direct Slash Command & Help Menu Dispatcher (Instant execution & file delivery)
+                    clean_t = text.strip() if text else ""
+                    is_slash = clean_t.startswith("/") and clean_t not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]
+                    is_help_word = clean_t.lower() in ["help", "menu", "commands", "start", "/help", "/menu", "/commands", "/start"]
 
-                            return response.text("success")
+                    if clean_t and (is_slash or is_help_word):
+                        try:
+                            from actions import commands
+                            cmd_to_run = clean_t if clean_t.startswith("/") else f"/{clean_t.lower()}"
+                            cmd_res = commands.handle_slash_command(cmd_to_run, str(user_id), str(sender_id))
+                            if cmd_res.get("handled"):
+                                reply_text = cmd_res.get("text", "")
+                                file_path = cmd_res.get("file_path")
+                                file_type = cmd_res.get("file_type", "document")
+
+                                if file_path:
+                                    from actions import skills_documents as doc_skills
+                                    doc_skills.send_telegram_file(str(sender_id), file_path, caption=reply_text, file_type=file_type)
+                                elif reply_text:
+                                    await out_channel.send_text_message(sender_id, reply_text)
+
+                                return response.text("success")
+                        except Exception as e:
+                            logger.error(f"Error handling direct command: {e}", exc_info=True)
+
+                    # 4. Dispatch Authorized Message to Rasa
+                    metadata = self.get_metadata(request) or {}
+                    metadata["chat_id"] = str(sender_id)
+                    metadata["user_id"] = str(user_id)
+
+                    try:
+                        if text == (INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART):
+                            await on_new_message(
+                                UserMessage(
+                                    text,
+                                    out_channel,
+                                    sender_id,
+                                    input_channel=self.name(),
+                                    metadata=metadata,
+                                )
+                            )
+                            await on_new_message(
+                                UserMessage(
+                                    "/start",
+                                    out_channel,
+                                    sender_id,
+                                    input_channel=self.name(),
+                                    metadata=metadata,
+                                )
+                            )
+                        else:
+                            await on_new_message(
+                                UserMessage(
+                                    text,
+                                    out_channel,
+                                    sender_id,
+                                    input_channel=self.name(),
+                                    metadata=metadata,
+                                )
+                            )
                     except Exception as e:
-                        logger.error(f"Error handling direct command: {e}", exc_info=True)
-
-                # 4. Dispatch Authorized Message to Rasa
-                metadata = self.get_metadata(request) or {}
-                metadata["chat_id"] = str(sender_id)
-                metadata["user_id"] = str(user_id)
-
-                try:
-                    if text == (INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART):
-                        await on_new_message(
-                            UserMessage(
-                                text,
-                                out_channel,
-                                sender_id,
-                                input_channel=self.name(),
-                                metadata=metadata,
-                            )
-                        )
-                        await on_new_message(
-                            UserMessage(
-                                "/start",
-                                out_channel,
-                                sender_id,
-                                input_channel=self.name(),
-                                metadata=metadata,
-                            )
-                        )
-                    else:
-                        await on_new_message(
-                            UserMessage(
-                                text,
-                                out_channel,
-                                sender_id,
-                                input_channel=self.name(),
-                                metadata=metadata,
-                            )
-                        )
-                except Exception as e:
-                    logger.error(f"Exception when trying to handle message: {e}")
-                    logger.debug(e, exc_info=True)
-                    if self.debug_mode:
-                        raise
+                        logger.error(f"Exception when trying to handle message: {e}")
+                        logger.debug(e, exc_info=True)
+                        if self.debug_mode:
+                            raise
 
                 return response.text("success")
+
 
         return telegram_webhook
