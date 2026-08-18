@@ -180,9 +180,25 @@ def init_db() -> None:
         )
     """)
 
+    # 13. User Preferences (Timezone & Settings)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id TEXT PRIMARY KEY,
+            timezone TEXT DEFAULT 'Asia/Kolkata',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Safe Schema Migrations
+    try:
+        cursor.execute("ALTER TABLE reminders ADD COLUMN timezone_name TEXT DEFAULT 'Asia/Kolkata'")
+    except Exception:
+        pass  # Column already exists
+
     conn.commit()
     conn.close()
     logger.info("Database initialized successfully.")
+
 
 
 # Initialize tables on module load
@@ -341,14 +357,85 @@ def get_expense_summary(user_id: str, month: Optional[str] = None) -> Dict[str, 
 
 
 # -------------------------------------------------------------
-# Reminders CRUD
+# User Preferences (Timezone) CRUD
 # -------------------------------------------------------------
-def add_reminder(user_id: str, chat_id: str, text: str, due_time: str, reminder_type: str = "general", is_recurring: int = 0, recurrence_pattern: str = "") -> int:
+def set_user_timezone(user_id: str, tz_name: str) -> bool:
+    """Sets or updates a user's preferred timezone (e.g. 'Asia/Kolkata', 'America/New_York')."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO reminders (user_id, chat_id, reminder_type, text, due_time, is_recurring, recurrence_pattern, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
-        (str(user_id), str(chat_id), reminder_type, text, due_time, is_recurring, recurrence_pattern)
+        """
+        INSERT INTO user_preferences (user_id, timezone, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id) DO UPDATE SET
+            timezone = excluded.timezone,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (str(user_id), tz_name.strip())
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_user_timezone_str(user_id: str) -> str:
+    """Gets user's configured timezone name, defaulting to 'Asia/Kolkata'."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT timezone FROM user_preferences WHERE user_id = ?", (str(user_id),))
+    row = cursor.fetchone()
+    conn.close()
+    if row and row["timezone"]:
+        return row["timezone"]
+    return "Asia/Kolkata"
+
+
+def get_user_timezone(user_id: str):
+    """Gets user's zoneinfo.ZoneInfo object, defaulting to Asia/Kolkata."""
+    import zoneinfo
+    tz_str = get_user_timezone_str(user_id)
+    try:
+        from .timezone_utils import resolve_timezone
+        return resolve_timezone(tz_str)
+    except Exception:
+        try:
+            return zoneinfo.ZoneInfo(tz_str)
+        except Exception:
+            return zoneinfo.ZoneInfo("Asia/Kolkata")
+
+
+# -------------------------------------------------------------
+# Reminders CRUD
+# -------------------------------------------------------------
+def add_reminder(
+    user_id: str,
+    chat_id: str,
+    text: str,
+    due_time: str,
+    reminder_type: str = "general",
+    is_recurring: int = 0,
+    recurrence_pattern: str = "",
+    timezone_name: str = "Asia/Kolkata",
+) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO reminders (
+            user_id, chat_id, reminder_type, text, due_time,
+            is_recurring, recurrence_pattern, timezone_name, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        """,
+        (
+            str(user_id),
+            str(chat_id),
+            reminder_type,
+            text,
+            due_time,
+            is_recurring,
+            recurrence_pattern,
+            timezone_name,
+        )
     )
     rem_id = cursor.lastrowid
     conn.commit()
@@ -368,22 +455,63 @@ def get_active_reminders(user_id: str) -> List[Dict[str, Any]]:
     return rows
 
 
-def get_due_reminders(now_iso: str) -> List[Dict[str, Any]]:
+def get_due_reminders(now_utc_iso: str) -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT * FROM reminders WHERE status = 'pending' AND due_time <= ?",
-        (now_iso,)
+        "SELECT * FROM reminders WHERE status = 'pending' AND due_time <= ? ORDER BY due_time ASC",
+        (now_utc_iso,)
     )
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return rows
 
 
+def claim_due_reminders(now_utc_iso: str) -> List[Dict[str, Any]]:
+    """
+    Atomically claims due reminders by transitioning status from 'pending' to 'in_flight'.
+    Guarantees no duplicate job triggers across concurrent threads or scheduler iterations.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM reminders WHERE status = 'pending' AND due_time <= ? ORDER BY due_time ASC",
+        (now_utc_iso,)
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    if rows:
+        ids = [r["id"] for r in rows]
+        placeholders = ",".join("?" for _ in ids)
+        cursor.execute(f"UPDATE reminders SET status = 'in_flight' WHERE id IN ({placeholders}) AND status = 'pending'", ids)
+        conn.commit()
+    conn.close()
+    return rows
+
+
+def update_reminder_next_run(reminder_id: int, next_due_utc_iso: str) -> None:
+    """Advances a recurring reminder to its next scheduled UTC timestamp and resets status to 'pending'."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE reminders SET due_time = ?, status = 'pending' WHERE id = ?",
+        (next_due_utc_iso, reminder_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 def mark_reminder_fired(reminder_id: int) -> None:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE reminders SET status = 'fired' WHERE id = ?", (reminder_id,))
+    conn.commit()
+    conn.close()
+
+
+def mark_reminder_failed(reminder_id: int, error_msg: str = "") -> None:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE reminders SET status = 'failed' WHERE id = ?", (reminder_id,))
     conn.commit()
     conn.close()
 
@@ -396,6 +524,7 @@ def delete_reminder(user_id: str, reminder_id: int) -> bool:
     conn.commit()
     conn.close()
     return affected
+
 
 
 # -------------------------------------------------------------

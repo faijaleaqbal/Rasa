@@ -19,6 +19,11 @@ from . import skills_android_controller as android
 from . import skills_advanced as adv
 from . import skills_super_pack as superpack
 from . import mcp_client as mcp
+try:
+    from addons.image_tools import slash_bridge as img_bridge
+except ImportError:
+    img_bridge = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +53,13 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
     if cmd in ["/start", "/help", "/commands", "/menu", "/allcommands"]:
         help_text = (
             "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
-            "**🌟 New Advanced Super-Skills:**\n"
+            "**🖼️ Image Tools & Passport Studio:**\n"
+            "• `/imagetools` — Open Image Tools Studio & features guide\n"
+            "• `/presets` — Browse Govt photo, Passport, Social Media & Print presets\n"
+            "• `/passport [country]` — Indian, US, UK passport photo specifications & creator\n"
+            "• `/compress <file>` — Smart image compressor (Target KB/MB mode, JPEG/PNG/WebP)\n"
+            "• `/exif <file>` & `/strip_exif` — Photo EXIF metadata inspector & GPS privacy stripper\n\n"
+            "**🌟 Advanced Super-Skills:**\n"
             "• `/adduser <user_id> [name]` — (Admin) Grant bot access to a Telegram user\n"
             "• `/removeuser <user_id>` — (Admin) Revoke bot access for a Telegram user\n"
             "• `/users` — (Admin) List all authorized Telegram users\n"
@@ -67,16 +78,46 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/ocr [url_or_file]` — High-accuracy image-to-text extractor (Tesseract + AI polish)\n"
             "• `/voice <text>` — Realistic Neural Voice Note generator (Edge-TTS Hindi/English)\n"
             "• `/aqi [city]` — Real-time live Air Quality Index (PM2.5, PM10 & Health Advisory)\n"
-            "• `/exif <file>` & `/strip_exif` — Photo EXIF metadata inspector & GPS privacy stripper\n"
             "• `/ipo` — Indian Mainboard & SME IPO Calendar & Grey Market Premium (GMP)\n"
             "• `/phish <url>` — Anti-phishing, fake bank trap & link safety scanner\n"
-            "• `/compress <file>` — Smart photo & PDF file compressor\n"
             "• `/postoffice <pin_or_area>` — India Post office branch finder & delivery status\n"
             "• `/ping <host>` — Server uptime & TCP latency ping\n"
             "• `/solve <question_or_photo>` — AI Question & Exam Problem Solver from photo or text\n"
             "• `/compare <item1> vs <item2>` — Side-by-side AI specs, pros/cons & tech comparison\n"
             "• `/wayback <url>` — Wayback Machine historical snapshots & deleted page viewer\n"
             "• `/mergepdf <files>` & `/splitpdf` — Merge multiple PDFs or extract page ranges\n\n"
+            "**⏱️ Timezone-Aware Reminders & Productivity:**\n"
+            "• `/remind <time> <msg>` — Timezone-aware reminder scheduler (IST default)\n"
+            "• `/reminders` & `/delremind <id>` — View & cancel active scheduled reminders\n"
+            "• `/set_timezone <tz>` & `/mytimezone` — Set & check preferred timezone (e.g. `Asia/Kolkata`, `EST`, `UTC`)\n"
+            "• `/medremind <time> <medicine>` — Scheduled medicine dosage reminders\n"
+            "• `/note <text>` & `/notes [query]` — Persistent user notepad\n"
+            "• `/todo <task>` & `/todos` — To-Do task manager with `/done <id>`\n"
+            "• `/qr <text_or_url>` — Generate HD QR code image\n"
+            "• `/barcode <number>` — Generate Code128 barcode image\n"
+            "• `/pincode <pin_or_area>` — India Post PIN code & area lookup\n"
+            "• `/ifsc <code>` — Bank branch & IFSC finder (Razorpay API)\n"
+            "• `/shorten <url>` — Create short TinyURL link\n"
+            "• `/time <city>` — World clock & timezone converter\n"
+            "• `/countdown <date>` — Event countdown tracker\n"
+            "• `/traffic <from> to <to>` — Commute ETA & route\n"
+            "• `/serverstatus` — EC2 CPU, RAM, Disk health\n"
+            "• `/speedtest` — Internet speed test\n\n"
+            "**💻 Developer, DB & MCP Supertools:**\n"
+            "• `/code <command or task>` — OpenCode MCP shell execution & coding engine\n"
+            "• `/sh <cmd>` or `/exec <cmd>` — Direct host terminal execution with genuine stdout/stderr\n"
+            "• `/github [repo]` — List GitHub repos, issues, and PRs\n"
+            "• `/screenshot <url>` — Live high-res website screenshot capture\n"
+            "• `/py <code>` — Python code execution sandbox\n"
+            "• `/sql <query>` — SQLite database query & table inspector\n"
+            "• `/kg <add|list|search>` — Knowledge Graph & relational memory\n"
+            "• `/social <url>` — Twitter/X, Reddit post content extractor\n"
+            "• `/log [service]` — Inspect live server & bot logs\n"
+            "• `/dns <domain>` — DNS records (A, MX, NS, TXT) lookup\n"
+            "• `/http <url>` — HTTP status, response latency & headers\n"
+            "• `/cron <expr>` — Translate cron syntax to plain English\n"
+            "• `/json <text>` — Format, minify & validate JSON\n"
+            "• `/ip [ip_address]` — Geo-IP location, ISP & ASN lookup\n\n"
             "**🌤️ Real-Time Free APIs:**\n"
             "• `/weather <city>` — Live weather (Default: Malda, WB)\n"
             "• `/news [topic]` — Top headlines (English)\n"
@@ -92,20 +133,6 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/joke` — Random clean joke & inspirational quote\n"
             "• `/math <expression>` — WolframAlpha & SymPy solver\n"
             "• `/science` — NASA Astronomy Picture of the Day\n\n"
-            "**💻 Developer, DB & MCP Supertools:**\n"
-            "• `/screenshot <url>` — Live high-res website screenshot capture\n"
-            "• `/py <code>` — Python code execution sandbox\n"
-            "• `/sql <query>` — SQLite database query & table inspector\n"
-            "• `/kg <add|list|search>` — Knowledge Graph & relational memory\n"
-            "• `/social <url>` — Twitter/X, Reddit post content extractor\n"
-            "• `/log [service]` — Inspect live server & bot logs\n"
-            "• `/dns <domain>` — DNS records (A, MX, NS, TXT) lookup\n"
-            "• `/http <url>` — HTTP status, response latency & headers\n"
-            "• `/cron <expr>` — Translate cron syntax to plain English\n"
-            "• `/json <text>` — Format, minify & validate JSON\n"
-            "• `/ip [ip_address]` — Geo-IP location, ISP & ASN lookup\n"
-            "• `/code <task>` — Delegate coding task via OpenCode server\n"
-            "• `/github [repo]` — List GitHub repos, issues, and PRs\n\n"
             "**🔐 Privacy & Security:**\n"
             "• `/passgen [length]` — Cryptographically strong password generator\n"
             "• `/hash <text>` — MD5, SHA-1, SHA-256, Base64 converter\n"
@@ -140,18 +167,6 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "• `/grammar <text>` — Grammar, tone polish & rewriter\n"
             "• `/email <topic>` — Formal business & leave email drafter\n"
             "• `/synonym <word>` — Thesaurus, synonyms & antonyms\n\n"
-            "**⏱️ Daily Productivity & Indian Services:**\n"
-            "• `/qr <text_or_url>` — Generate HD QR code image\n"
-            "• `/barcode <number>` — Generate Code128 barcode image\n"
-            "• `/pincode <pin_or_area>` — India Post PIN code & area/branch lookup\n"
-            "• `/ifsc <code>` — Bank branch & IFSC finder (Razorpay API)\n"
-            "• `/shorten <url>` — Create short TinyURL link\n"
-            "• `/remind <time> <msg>` — Time-based reminder scheduler\n"
-            "• `/time <city>` — World clock & timezone converter\n"
-            "• `/countdown <date>` — Event countdown tracker\n"
-            "• `/traffic <from> to <to>` — Commute ETA & route\n"
-            "• `/serverstatus` — EC2 CPU, RAM, Disk health\n"
-            "• `/speedtest` — Internet speed test\n\n"
             "**🎮 Entertainment & Media:**\n"
             "• `/meme <top> | <bottom>` — Custom meme image generator\n"
             "• `/anime <title>` — MyAnimeList anime & manga ratings\n"
@@ -172,6 +187,7 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "💡 _Tip: You can tap the **[/] Menu** button next to your text bar to auto-complete any command!_"
         )
         return {"handled": True, "text": help_text}
+
 
     # 2. /weather <city>
     elif cmd == "/weather":
@@ -281,22 +297,52 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         return {"handled": True, "text": apis.get_nasa_apod()}
 
     # 17. /remind <time> <message>
-    elif cmd == "/remind":
-        tokens = args_str.split(maxsplit=2)
-        if len(tokens) >= 2:
-            time_part = f"{tokens[0]} {tokens[1]}" if len(tokens) >= 2 and tokens[0] in ["in", "at", "every", "tomorrow"] else tokens[0]
-            msg_part = tokens[2] if time_part.count(" ") > 0 and len(tokens) >= 3 else " ".join(tokens[1:])
-            res = utils.create_reminder(user_id, chat_id, msg_part, time_part)
-            return {"handled": True, "text": res}
-        return {"handled": True, "text": "Usage: `/remind <time> <message>`\nExample: `/remind in 15 mins Join team sync`"}
+    elif cmd in ["/remind", "/reminder", "/setreminder"]:
+        if not args_str.strip():
+            return {
+                "handled": True,
+                "text": (
+                    "⏰ **Alya Timezone-Aware Reminder Scheduler**\n\n"
+                    "**Usage:** `/remind <time> <message>`\n"
+                    "**Examples:**\n"
+                    "• `/remind 11:00 AM Call Rahul`\n"
+                    "• `/remind at 11 AM Buy groceries`\n"
+                    "• `/remind tomorrow at 9 AM Team Standup meeting`\n"
+                    "• `/remind in 2 hours Take medicine`\n"
+                    "• `/remind in 15 mins Check oven`\n"
+                    "• `/remind 11 AM EST US client sync call`\n"
+                    "• `/remind every day at 9 AM Morning workout`\n\n"
+                    "💡 *Default Timezone: Asia/Kolkata (IST). Change via `/set_timezone <tz>`*"
+                )
+            }
+        from .timezone_utils import split_reminder_command
+        time_part, msg_part = split_reminder_command(args_str)
+        res = utils.create_reminder(user_id, chat_id, msg_part, time_part)
+        return {"handled": True, "text": res}
+
+    # 17b. /reminders, /myreminders (List user reminders)
+    elif cmd in ["/reminders", "/myreminders", "/listreminders", "/active_reminders"]:
+        return {"handled": True, "text": utils.list_user_reminders(user_id)}
+
+    # 17c. /delremind <id>, /cancelreminder <id>
+    elif cmd in ["/delremind", "/delreminder", "/cancelreminder", "/rmremind"]:
+        if not args_str.strip() or not args_str.strip().isdigit():
+            return {"handled": True, "text": "Usage: `/delremind <reminder_id>` (e.g. `/delremind 1`)\nUse `/reminders` to check IDs."}
+        return {"handled": True, "text": utils.delete_user_reminder(user_id, int(args_str.strip()))}
+
+    # 17d. /set_timezone <tz> or /mytimezone
+    elif cmd in ["/set_timezone", "/settimezone", "/mytimezone"]:
+        return {"handled": True, "text": utils.set_user_timezone_preference(user_id, args_str)}
 
     # 18. /medremind <time> <medicine>
     elif cmd == "/medremind":
-        tokens = args_str.split(maxsplit=1)
-        if len(tokens) >= 2:
-            res = utils.add_medicine_schedule(user_id, name=tokens[1], dosage="1 dose", schedule_time=tokens[0])
-            return {"handled": True, "text": res}
-        return {"handled": True, "text": "Usage: `/medremind <time> <medicine_name>`\nExample: `/medremind 9:00AM Paracetamol 500mg`"}
+        if not args_str.strip():
+            return {"handled": True, "text": "Usage: `/medremind <time> <medicine_name>`\nExample: `/medremind 9:00 AM Paracetamol 500mg`"}
+        from .timezone_utils import split_reminder_command
+        time_part, med_part = split_reminder_command(args_str)
+        res = utils.add_medicine_schedule(user_id, name=med_part, dosage="1 dose", schedule_time=time_part)
+        return {"handled": True, "text": res}
+
 
     # 19. /note <text>
     elif cmd == "/note":
@@ -422,11 +468,15 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             return {"handled": True, "text": f"{issues}\n\n---\n\n{prs}"}
         return {"handled": True, "text": prod.list_github_repos(username_or_org=args_str)}
 
-    # 36. /code <task>
-    elif cmd == "/code":
+    # 36. /code, /sh, /exec, /bash, /terminal <command or task>
+    elif cmd in ["/code", "/sh", "/exec", "/bash", "/terminal", "/run"]:
         if not args_str:
-            return {"handled": True, "text": "Usage: `/code <coding task description>`\nExample: `/code Write a Python script to monitor API uptime`"}
+            return {
+                "handled": True,
+                "text": "Usage: `/code <command or task>` (e.g. `/code ls -la`, `/code pwd`, `/code git status`)\nOr direct shell: `/sh ls -la`"
+            }
         return {"handled": True, "text": mcp.mcp_execute_coding_task("opencode", args_str)}
+
 
     # 37. /pdf <title> [content]
     elif cmd == "/pdf":
@@ -1056,6 +1106,16 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             ftype = "photo" if out_f.endswith((".jpg", ".png", ".webp")) else "document"
             return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
         return {"handled": True, "text": text}
+
+    # Image Tools Module Slash Commands
+    elif cmd in ["/imagetools", "/imagehelp", "/phototools", "/presets", "/imagepresets", "/passport", "/visa"]:
+        if img_bridge:
+            handled, text, out_f, ftype = img_bridge.handle_image_tool_command(cmd, args_str)
+            if handled:
+                if out_f:
+                    return {"handled": True, "text": text, "file_path": out_f, "file_type": ftype}
+                return {"handled": True, "text": text}
+
 
     # 129. /postoffice <pincode_or_area> (India Post Branch Finder)
     elif cmd in ["/postoffice", "/dak", "/postbranches"]:

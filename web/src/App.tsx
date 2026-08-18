@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { GlowingChatInput } from "./components/ui/chat-input";
+import { ImageToolsStudio } from "./components/ImageTools/ImageToolsStudio";
 import {
   TrendingUp,
   Coins,
@@ -15,8 +16,11 @@ import {
   RefreshCw,
   Sparkles,
   ShieldCheck,
-  Cpu
+  Cpu,
+  Sliders,
+  MessageSquare
 } from "lucide-react";
+
 
 interface Message {
   id: string;
@@ -28,16 +32,17 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
+  { icon: Sliders, label: "Open Image Tools Studio", prompt: "/imagetools" },
   { icon: TrendingUp, label: "Reliance & Nifty Stock", prompt: "/stock RELIANCE" },
   { icon: Coins, label: "Live Gold Rate (24K)", prompt: "/gold" },
   { icon: Train, label: "IRCTC Train Tracker", prompt: "/train 12301" },
   { icon: FileText, label: "ATS Resume Builder", prompt: "/resume Senior Full Stack Software Engineer" },
   { icon: Sun, label: "Morning AI Briefing", prompt: "/briefing" },
   { icon: Code2, label: "Python Sandbox", prompt: "/py [x**2 for x in range(10)]" },
-  { icon: Phone, label: "Find My Phone Alarm", prompt: "/findmyphone" },
 ];
 
 export default function App() {
+  const [activeAppMode, setActiveAppMode] = useState<"chat" | "image_tools">("chat");
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome-msg",
@@ -46,6 +51,7 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isServerOnline, setIsServerOnline] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -76,8 +82,14 @@ export default function App() {
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
 
+    if (text.trim().toLowerCase().startsWith("/imagetool") || text.trim().toLowerCase() === "/imagehelp") {
+      setActiveAppMode("image_tools");
+      return;
+    }
+
     const userTimestamp = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     const userMessageId = `user-${Date.now()}`;
+
 
     setMessages((prev) => [
       ...prev,
@@ -190,7 +202,35 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] text-xs">
+            {/* Mode Switcher */}
+            <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-2xl border border-white/[0.08]">
+              <button
+                onClick={() => setActiveAppMode("chat")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeAppMode === "chat"
+                    ? "bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-500/20"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>AI Chat</span>
+              </button>
+
+              <button
+                onClick={() => setActiveAppMode("image_tools")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeAppMode === "image_tools"
+                    ? "bg-gradient-to-r from-sky-500 to-purple-600 text-white shadow-lg shadow-purple-500/20"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Image Studio</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-sky-400/20 text-sky-300">NEW</span>
+              </button>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] text-xs">
               <span className={`w-2 h-2 rounded-full ${isServerOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></span>
               <span className="text-slate-300 font-medium">{isServerOnline ? "EC2 Server Live" : "Connecting..."}</span>
             </div>
@@ -199,7 +239,13 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-6 flex flex-col justify-between">
+      {activeAppMode === "image_tools" ? (
+        <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6">
+          <ImageToolsStudio />
+        </main>
+      ) : (
+        <main className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-6 flex flex-col justify-between">
+
         {/* Messages Feed */}
         <div className="space-y-6 flex-1 pb-36">
           {messages.map((msg) => (
@@ -279,34 +325,38 @@ export default function App() {
           <div ref={messagesEndRef} />
         </div>
       </main>
+      )}
 
-      {/* Floating Bottom Action Bar & Glowing BorderBeam Input */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-[#0d0d0f] via-[#0d0d0f]/95 to-transparent pt-6 pb-4 px-4">
-        <div className="max-w-4xl mx-auto space-y-3">
-          {/* Quick Action Chips Bar */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {QUICK_PROMPTS.map((qp, idx) => {
-              const Icon = qp.icon;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => handleSendMessage(qp.prompt)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white/[0.04] border border-white/[0.06] text-slate-300 hover:bg-white/[0.08] hover:text-white transition-all flex-shrink-0"
-                >
-                  <Icon className="w-3.5 h-3.5 text-sky-400" />
-                  <span>{qp.label}</span>
-                </button>
-              );
-            })}
+      {/* Floating Bottom Action Bar & Glowing BorderBeam Input (Chat Mode only) */}
+      {activeAppMode === "chat" && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-[#0d0d0f] via-[#0d0d0f]/95 to-transparent pt-6 pb-4 px-4">
+          <div className="max-w-4xl mx-auto space-y-3">
+            {/* Quick Action Chips Bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {QUICK_PROMPTS.map((qp, idx) => {
+                const Icon = qp.icon;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleSendMessage(qp.prompt)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white/[0.04] border border-white/[0.06] text-slate-300 hover:bg-white/[0.08] hover:text-white transition-all flex-shrink-0"
+                  >
+                    <Icon className="w-3.5 h-3.5 text-sky-400" />
+                    <span>{qp.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* The Exact Glowing BorderBeam ChatInput */}
+            <GlowingChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
           </div>
-
-          {/* The Exact Glowing BorderBeam ChatInput */}
-          <GlowingChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
 
 function BotIcon({ className }: { className?: string }) {
   return (

@@ -9,68 +9,137 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from . import db
+from .timezone_utils import (
+    DEFAULT_TIMEZONE,
+    resolve_timezone,
+    parse_natural_datetime,
+    to_utc_iso,
+    from_utc_iso_to_user_tz,
+    get_timezone_abbreviation,
+    split_reminder_command,
+)
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# 20. Reminders (General-purpose, time-based)
+# 20. Reminders (Timezone-aware, IST default, single-execution)
 # ---------------------------------------------------------------------------
 
 def create_reminder(user_id: str, chat_id: str, text: str, time_str: str) -> str:
     """
-    Creates a time-based reminder.
-    `time_str` can be ISO date/time or natural offsets like 'in 10 minutes', 'tomorrow at 9am'.
+    Creates a time-based reminder with exact timezone handling (default: Asia/Kolkata / IST).
+    `time_str` can be '11:00 AM', 'at 11 AM', 'tomorrow at 9am', 'in 2 hours', '11 AM EST', etc.
     """
-    # Simple natural offset parsing
-    now = datetime.now()
-    due_dt = None
+    user_tz = db.get_user_timezone(user_id)
+    due_dt, effective_tz, formatted_display, is_recurring, recurrence_pattern = parse_natural_datetime(
+        time_str, user_tz=user_tz
+    )
 
-    time_lower = time_str.lower().strip()
-    match_mins = re.search(r"in\s+(\d+)\s+(minute|min|m)", time_lower)
-    match_hours = re.search(r"in\s+(\d+)\s+(hour|hr|h)", time_lower)
-    match_days = re.search(r"in\s+(\d+)\s+(day|d)", time_lower)
+    due_utc_iso = to_utc_iso(due_dt)
+    tz_name_str = str(effective_tz)
 
-    if match_mins:
-        mins = int(match_mins.group(1))
-        due_dt = now + timedelta(minutes=mins)
-    elif match_hours:
-        hrs = int(match_hours.group(1))
-        due_dt = now + timedelta(hours=hrs)
-    elif match_days:
-        dys = int(match_days.group(1))
-        due_dt = now + timedelta(days=dys)
-    else:
-        try:
-            due_dt = datetime.fromisoformat(time_str)
-        except Exception:
-            due_dt = now + timedelta(hours=1)
+    rem_id = db.add_reminder(
+        user_id=user_id,
+        chat_id=chat_id,
+        text=text.strip(),
+        due_time=due_utc_iso,
+        reminder_type="general",
+        is_recurring=int(is_recurring),
+        recurrence_pattern=recurrence_pattern,
+        timezone_name=tz_name_str,
+    )
 
-    due_iso = due_dt.isoformat()
-    rem_id = db.add_reminder(user_id, chat_id, text, due_iso, reminder_type="general")
-    return f"⏰ **Reminder Set (ID: #{rem_id})!**\n• Note: {text}\n• Due: `{due_dt.strftime('%B %d, %Y at %I:%M %p')}`"
+    rec_tag = " (🔁 Recurring Daily)" if is_recurring else ""
+    return (
+        f"✅ **Reminder Set (ID: #{rem_id})!**\n"
+        f"• Note: **{text.strip()}**\n"
+        f"• Scheduled for: `{formatted_display}`{rec_tag}\n"
+        f"• Timezone: `{tz_name_str}`"
+    )
 
 
 def list_user_reminders(user_id: str) -> str:
-    """Lists all active reminders for the user."""
+    """Lists all active pending reminders for the user, rendered in their configured timezone."""
+    user_tz = db.get_user_timezone(user_id)
     rems = db.get_active_reminders(user_id)
     if not rems:
         return "⏰ You have no pending reminders."
 
     lines = []
     for r in rems:
-        lines.append(f"• **[#{r['id']}]** {r['text']} (Due: `{r['due_time'][:16]}`)")
-    return "⏰ **Your Active Reminders:**\n\n" + "\n".join(lines)
+        rem_tz = resolve_timezone(r.get("timezone_name") or str(user_tz))
+        due_dt = from_utc_iso_to_user_tz(r["due_time"], rem_tz)
+        tz_abbr = get_timezone_abbreviation(due_dt)
+        time_str = due_dt.strftime(f"%I:%M %p {tz_abbr} (%a, %b %d, %Y)")
+        rec_str = " (🔁 Daily)" if r.get("is_recurring") else ""
+        lines.append(f"• **[#{r['id']}]** {r['text']}\n  └ ⏰ Due: `{time_str}`{rec_str}")
+
+    tz_name = db.get_user_timezone_str(user_id)
+    return f"⏰ **Your Active Reminders (Timezone: {tz_name}):**\n\n" + "\n\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
+def delete_user_reminder(user_id: str, reminder_id: int) -> str:
+    """Cancels/deletes an active reminder."""
+    success = db.delete_reminder(user_id, reminder_id)
+    if success:
+        return f"🗑️ **Reminder #{reminder_id} cancelled and deleted successfully.**"
+    return f"❌ Reminder #{reminder_id} not found or already completed."
+
+
+def set_user_timezone_preference(user_id: str, tz_input: str) -> str:
+    """Configures the user's preferred timezone (e.g. 'Asia/Kolkata', 'America/New_York', 'UTC')."""
+    if not tz_input.strip():
+        curr_tz = db.get_user_timezone_str(user_id)
+        return f"🌐 **Current Timezone Setting:** `{curr_tz}`\nUsage: `/timezone <timezone_name>` (e.g. `/timezone Asia/Kolkata`, `/timezone EST`, `/timezone UTC`)"
+
+    resolved_tz = resolve_timezone(tz_input)
+    db.set_user_timezone(user_id, str(resolved_tz))
+    now_user = datetime.now(resolved_tz)
+    tz_abbr = get_timezone_abbreviation(now_user)
+
+    return (
+        f"🌐 **Timezone Preference Updated!**\n\n"
+        f"• **Timezone**: `{str(resolved_tz)}` ({tz_abbr})\n"
+        f"• **Current Local Time**: `{now_user.strftime('%I:%M:%S %p (%A, %b %d, %Y)')}`\n\n"
+        f"_All your future reminders and time queries will default to this timezone._"
+    )
+
+
+# -------------------------------------------------------------
 # 21. Medicine Reminders
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------
 
 def add_medicine_schedule(user_id: str, name: str, dosage: str, schedule_time: str, instructions: str = "") -> str:
-    """Adds a recurring medicine reminder."""
+    """Adds a recurring medicine reminder with proper timezone resolution."""
+    user_tz = db.get_user_timezone(user_id)
+    due_dt, effective_tz, formatted_display, is_recurring, recurrence_pattern = parse_natural_datetime(
+        schedule_time, user_tz=user_tz
+    )
+    due_utc_iso = to_utc_iso(due_dt)
+    tz_name_str = str(effective_tz)
+
+    # Add medicine entry
     med_id = db.add_medicine(user_id, name, dosage, schedule_time, instructions)
-    return f"💊 **Medicine Reminder Added (ID: #{med_id}):**\n• Medicine: **{name}**\n• Dosage: `{dosage}`\n• Time: `{schedule_time}`\n• Instructions: {instructions or 'None'}"
+    # Add linked daily recurring reminder
+    db.add_reminder(
+        user_id=user_id,
+        chat_id=user_id,
+        text=f"{name} ({dosage}) - {instructions or 'Take with water'}",
+        due_time=due_utc_iso,
+        reminder_type="medicine",
+        is_recurring=1,
+        recurrence_pattern="daily",
+        timezone_name=tz_name_str,
+    )
+
+    return (
+        f"💊 **Medicine Schedule Added (ID: #{med_id}):**\n"
+        f"• Medicine: **{name}**\n"
+        f"• Dosage: `{dosage}`\n"
+        f"• Scheduled Time: `{formatted_display}` (Daily)\n"
+        f"• Instructions: {instructions or 'Take with water'}"
+    )
 
 
 def list_medicine_schedules(user_id: str) -> str:
