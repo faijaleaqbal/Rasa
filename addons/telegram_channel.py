@@ -447,14 +447,25 @@ class SmartTelegramInput(TelegramInput):
             # Enforce Telegram 100 commands maximum constraint
             safe_commands = commands[:100]
 
-            # 1. Set commands for default scope
-            url_def = f"https://api.telegram.org/bot{self.access_token}/setMyCommands"
-            r1 = requests.post(url_def, json={"commands": safe_commands, "scope": {"type": "default"}}, timeout=10)
+            # 1. Set commands for default and private chats
+            url_set = f"https://api.telegram.org/bot{self.access_token}/setMyCommands"
+            requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "default"}}, timeout=10)
+            requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "all_private_chats"}}, timeout=10)
 
-            # 2. Set commands for private chats
-            r2 = requests.post(url_def, json={"commands": safe_commands, "scope": {"type": "all_private_chats"}}, timeout=10)
+            # 2. Register for admin user chat scopes directly
+            admin_env = os.getenv("ALLOWED_TELEGRAM_USER_ID", "") or os.getenv("ADMIN_TELEGRAM_USER_ID", "")
+            for a_id in [x.strip() for x in admin_env.split(",") if x.strip().isdigit()]:
+                try:
+                    requests.post(url_set, json={"commands": safe_commands, "scope": {"type": "chat", "chat_id": int(a_id)}}, timeout=5)
+                    requests.post(
+                        f"https://api.telegram.org/bot{self.access_token}/setChatMenuButton",
+                        json={"chat_id": int(a_id), "menu_button": {"type": "commands"}},
+                        timeout=5
+                    )
+                except Exception as ex_a:
+                    logger.debug(f"Could not set chat-specific commands for {a_id}: {ex_a}")
 
-            # 3. Explicitly set native chat menu button to 'commands'
+            # 3. Explicitly set native chat menu button to 'commands' globally
             url_menu = f"https://api.telegram.org/bot{self.access_token}/setChatMenuButton"
             resp = requests.post(url_menu, json={"menu_button": {"type": "commands"}}, timeout=10)
 
@@ -628,11 +639,16 @@ class SmartTelegramInput(TelegramInput):
                     # Silently drop the message - return HTTP 200 OK so Telegram doesn't resend
                     return response.text("success")
 
-                # 3.5 Direct Slash Command Dispatcher (Instant execution & file delivery)
-                if text and text.startswith("/") and text not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]:
+                # 3.5 Direct Slash Command & Help Menu Dispatcher (Instant execution & file delivery)
+                clean_t = text.strip() if text else ""
+                is_slash = clean_t.startswith("/") and clean_t not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]
+                is_help_word = clean_t.lower() in ["help", "menu", "commands", "start", "/help", "/menu", "/commands", "/start"]
+
+                if clean_t and (is_slash or is_help_word):
                     try:
                         from actions import commands
-                        cmd_res = commands.handle_slash_command(text, str(user_id), str(sender_id))
+                        cmd_to_run = clean_t if clean_t.startswith("/") else f"/{clean_t.lower()}"
+                        cmd_res = commands.handle_slash_command(cmd_to_run, str(user_id), str(sender_id))
                         if cmd_res.get("handled"):
                             reply_text = cmd_res.get("text", "")
                             file_path = cmd_res.get("file_path")
@@ -646,7 +662,7 @@ class SmartTelegramInput(TelegramInput):
 
                             return response.text("success")
                     except Exception as e:
-                        logger.error(f"Error handling direct slash command: {e}", exc_info=True)
+                        logger.error(f"Error handling direct command: {e}", exc_info=True)
 
                 # 4. Dispatch Authorized Message to Rasa
                 metadata = self.get_metadata(request) or {}

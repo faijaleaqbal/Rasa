@@ -43,8 +43,8 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
 
     logger.info(f"Processing slash command: {cmd} with args '{args_str}' for user {user_id}")
 
-    # 1. /help or /start
-    if cmd in ["/start", "/help", "/commands"]:
+    # 1. /help or /start or /menu
+    if cmd in ["/start", "/help", "/commands", "/menu", "/allcommands"]:
         help_text = (
             "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
             "**🌟 New Advanced Super-Skills:**\n"
