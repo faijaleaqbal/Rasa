@@ -95,6 +95,68 @@ class TestCommandRouting(unittest.TestCase):
             if os.path.exists(test_file):
                 os.remove(test_file)
 
+    def test_two_step_media_workflow(self):
+        """Uploading file first, then calling bare /compress should use cached media."""
+        test_file = "/tmp/two_step_test.jpg"
+        with open(test_file, "w") as f:
+            f.write("image-content-user-a")
+
+        try:
+            # 1. User uploads file (cached)
+            cmd_handler.set_last_user_media("user_100", test_file)
+
+            # 2. User sends bare '/compress'
+            with patch("actions.skills_super_pack.compress_media_file") as mock_comp:
+                mock_comp.return_value = (True, "Compressed 2-step OK", "/tmp/out_2step.jpg")
+                res = cmd_handler.handle_slash_command("/compress", "user_100", "user_100")
+                self.assertTrue(res.get("handled"))
+                mock_comp.assert_called_once_with(test_file)
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    def test_user_isolation_no_cross_user_media_leakage(self):
+        """User A's media must never be accessible to User B."""
+        file_a = "/tmp/user_a_file.jpg"
+        file_b = "/tmp/user_b_file.jpg"
+        with open(file_a, "w") as f:
+            f.write("image-A")
+        with open(file_b, "w") as f:
+            f.write("image-B")
+
+        try:
+            cmd_handler.set_last_user_media("user_A", file_a)
+            cmd_handler.set_last_user_media("user_B", file_b)
+
+            with patch("actions.skills_super_pack.compress_media_file") as mock_comp:
+                mock_comp.return_value = (True, "OK", "/tmp/out.jpg")
+
+                # User A runs /compress -> processes file_a
+                cmd_handler.handle_slash_command("/compress", "user_A", "user_A")
+                mock_comp.assert_called_with(file_a)
+
+                # User B runs /compress -> processes file_b
+                cmd_handler.handle_slash_command("/compress", "user_B", "user_B")
+                mock_comp.assert_called_with(file_b)
+
+                # User C (no uploads) runs /compress -> gets usage prompt, does NOT touch A or B
+                res_c = cmd_handler.handle_slash_command("/compress", "user_C", "user_C")
+                self.assertTrue(res_c.get("handled"))
+                self.assertIn("Compressor Usage", res_c.get("text", ""))
+        finally:
+            if os.path.exists(file_a):
+                os.remove(file_a)
+            if os.path.exists(file_b):
+                os.remove(file_b)
+
+    def test_cache_handles_missing_file_gracefully(self):
+        """If cached file was deleted from disk, return usage without crashing."""
+        non_existent = "/tmp/already_deleted_12345.jpg"
+        cmd_handler._LAST_USER_MEDIA["user_ghost"] = {"path": non_existent, "ts": 100000}
+        res = cmd_handler.handle_slash_command("/compress", "user_ghost", "user_ghost")
+        self.assertTrue(res.get("handled"))
+        self.assertIn("Compressor Usage", res.get("text", ""))
+
 
 class TestDispatcherPriorityIntegration(unittest.TestCase):
     """

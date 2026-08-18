@@ -27,22 +27,52 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+import time
+import threading
 
-_LAST_USER_MEDIA: Dict[str, str] = {}
+_LAST_USER_MEDIA: Dict[str, Dict[str, Any]] = {}
+_LAST_USER_MEDIA_LOCK = threading.Lock()
+MEDIA_CACHE_TTL_SECONDS = 3600  # 1 hour TTL
 
 
 def set_last_user_media(user_id: str, file_path: str) -> None:
-    """Caches the most recently uploaded user media file for subsequent commands."""
-    if user_id and file_path and os.path.exists(file_path):
-        _LAST_USER_MEDIA[str(user_id)] = file_path
+    """Caches the most recently uploaded user media file for subsequent commands with user isolation and TTL."""
+    if not user_id or not file_path:
+        return
+    norm_path = os.path.abspath(file_path)
+    if not os.path.exists(norm_path):
+        return
+
+    with _LAST_USER_MEDIA_LOCK:
+        now = time.time()
+        # Clean expired entries
+        expired = [uid for uid, rec in _LAST_USER_MEDIA.items() if now - rec.get("ts", 0) > MEDIA_CACHE_TTL_SECONDS]
+        for exp_uid in expired:
+            _LAST_USER_MEDIA.pop(exp_uid, None)
+
+        _LAST_USER_MEDIA[str(user_id)] = {
+            "path": norm_path,
+            "ts": now
+        }
 
 
 def get_last_user_media(user_id: str) -> Optional[str]:
-    """Retrieves cached media file if still present on disk."""
-    fpath = _LAST_USER_MEDIA.get(str(user_id))
-    if fpath and os.path.exists(fpath):
-        return fpath
-    return None
+    """Retrieves cached media file strictly scoped to user_id if valid and not expired."""
+    if not user_id:
+        return None
+    with _LAST_USER_MEDIA_LOCK:
+        rec = _LAST_USER_MEDIA.get(str(user_id))
+        if not rec:
+            return None
+        if time.time() - rec.get("ts", 0) > MEDIA_CACHE_TTL_SECONDS:
+            _LAST_USER_MEDIA.pop(str(user_id), None)
+            return None
+        fpath = rec.get("path")
+        if fpath and os.path.exists(fpath):
+            return fpath
+        else:
+            _LAST_USER_MEDIA.pop(str(user_id), None)
+            return None
 
 
 def handle_slash_command(
@@ -792,9 +822,17 @@ def handle_slash_command(
 
     # 104. /transcribe [url_or_path]
     elif cmd in ["/transcribe", "/stt", "/voicetotext", "/audio"]:
-        if not args_str:
-            return {"handled": True, "text": "Usage: `/transcribe <audio_url_or_path>`\nExample: `/transcribe https://example.com/sample.mp3` or send a voice message directly in chat!"}
-        return {"handled": True, "text": adv.transcribe_audio(args_str)}
+        target_file = None
+        if args_str and (os.path.exists(args_str.split()[0]) or args_str.startswith("http")):
+            target_file = args_str.split()[0]
+        elif attachment_path and os.path.exists(attachment_path):
+            target_file = attachment_path
+        else:
+            target_file = get_last_user_media(user_id)
+
+        if not target_file:
+            return {"handled": True, "text": "Usage: `/transcribe <audio_url_or_path>`\nExample: `/transcribe https://example.com/sample.mp3` or send a voice message with `/transcribe` caption!"}
+        return {"handled": True, "text": adv.transcribe_audio(target_file)}
 
     # 105. /med <medicine> or /medicine <medicine>
     elif cmd in ["/med", "/medicine", "/dawa", "/drug"]:
@@ -816,9 +854,17 @@ def handle_slash_command(
 
     # 108. /ocr [url_or_path]
     elif cmd in ["/ocr", "/extracttext", "/readimage"]:
-        if not args_str:
-            return {"handled": True, "text": "Usage: `/ocr <image_url_or_path>`\nExample: `/ocr https://example.com/receipt.png` or send a photo directly in chat!"}
-        return {"handled": True, "text": adv.extract_ocr_text(args_str)}
+        target_file = None
+        if args_str and (os.path.exists(args_str.split()[0]) or args_str.startswith("http")):
+            target_file = args_str.split()[0]
+        elif attachment_path and os.path.exists(attachment_path):
+            target_file = attachment_path
+        else:
+            target_file = get_last_user_media(user_id)
+
+        if not target_file:
+            return {"handled": True, "text": "Usage: `/ocr <image_url_or_path>`\nExample: `/ocr https://example.com/receipt.png` or send a photo with `/ocr` caption!"}
+        return {"handled": True, "text": adv.extract_ocr_text(target_file)}
 
     # 109. /today or /history
     elif cmd in ["/today", "/history", "/onthisday", "/dayinhistory"]:
@@ -964,16 +1010,32 @@ def handle_slash_command(
 
     # 124. /exif [url_or_file] (Photo EXIF Inspector)
     elif cmd in ["/exif", "/metadata", "/photoinfo"]:
-        if not args_str:
+        target_file = None
+        if args_str and (os.path.exists(args_str.split()[0]) or args_str.startswith("http")):
+            target_file = args_str.split()[0]
+        elif attachment_path and os.path.exists(attachment_path):
+            target_file = attachment_path
+        else:
+            target_file = get_last_user_media(user_id)
+
+        if not target_file:
             return {"handled": True, "text": "📷 **EXIF Inspector Usage:** `/exif <image_url_or_file>` (Inspects camera, lens & GPS location)"}
-        success, text, _ = superpack.inspect_or_strip_image_exif(args_str, strip_exif=False)
+        success, text, _ = superpack.inspect_or_strip_image_exif(target_file, strip_exif=False)
         return {"handled": True, "text": text}
 
     # 125. /strip_exif [url_or_file] (Remove GPS/EXIF Privacy Stripper)
     elif cmd in ["/strip_exif", "/stripexif", "/cleanphoto"]:
-        if not args_str:
+        target_file = None
+        if args_str and (os.path.exists(args_str.split()[0]) or args_str.startswith("http")):
+            target_file = args_str.split()[0]
+        elif attachment_path and os.path.exists(attachment_path):
+            target_file = attachment_path
+        else:
+            target_file = get_last_user_media(user_id)
+
+        if not target_file:
             return {"handled": True, "text": "🛡️ **Privacy EXIF Stripper Usage:** `/strip_exif <image_url_or_file>` (Removes all location & camera tags)"}
-        success, text, out_file = superpack.inspect_or_strip_image_exif(args_str, strip_exif=True)
+        success, text, out_file = superpack.inspect_or_strip_image_exif(target_file, strip_exif=True)
         if success and out_file:
             return {"handled": True, "text": text, "file_path": out_file, "file_type": "photo"}
         return {"handled": True, "text": text}
