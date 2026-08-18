@@ -9,6 +9,7 @@ import base64
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
+import urllib.parse
 import requests
 from dotenv import load_dotenv
 
@@ -734,32 +735,88 @@ def lookup_recipe(dish: str) -> str:
 # 8. India Specific Lookups (Pincode & Bank IFSC)
 # ---------------------------------------------------------------------------
 
-def lookup_pincode(pincode: str) -> str:
-    """Looks up India Post office details by 6-digit PIN code."""
-    clean = pincode.strip()
-    if not (clean.isdigit() and len(clean) == 6):
-        return "Usage: `/pincode <6-digit PIN>`\nExample: `/pincode 732101`"
+def lookup_pincode(query: str) -> str:
+    """Looks up India Post office details by 6-digit PIN code or Area / Branch / City name."""
+    clean = query.strip()
+    if not clean or len(clean) < 2:
+        return (
+            "📌 **Pincode & Area Lookup Usage:**\n"
+            "• `/pincode <6-digit PIN>` — e.g. `/pincode 110001`\n"
+            "• `/pincode <Area/City Name>` — e.g. `/pincode Agra`, `/pincode Bandra`"
+        )
 
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+    # 1. If numeric 6-digit PIN code
+    if clean.isdigit() and len(clean) == 6:
+        try:
+            url = f"https://api.postalpincode.in/pincode/{clean}"
+            resp = requests.get(url, headers=headers, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and data[0].get("Status") == "Success":
+                    pos = data[0].get("PostOffice", [])
+                    if not pos:
+                        return f"❌ No postal data found for PIN code `{clean}`."
+
+                    first = pos[0]
+                    lines = [
+                        f"📮 **India Post Pincode Info (`{clean}`):**\n",
+                        f"• **District**: {first.get('District', 'N/A')}",
+                        f"• **State**: {first.get('State', 'N/A')}",
+                        f"• **Circle / Division**: {first.get('Circle', 'N/A')} / {first.get('Division', 'N/A')}",
+                        f"• **Post Offices Covered ({len(pos)}):**"
+                    ]
+                    for po in pos[:12]:
+                        del_stat = po.get("DeliveryStatus", "")
+                        b_type = po.get("BranchType", "")
+                        del_str = f" ({del_stat})" if del_stat else ""
+                        type_str = f" [{b_type}]" if b_type else ""
+                        lines.append(f"  - **{po.get('Name')}**{type_str}{del_str}")
+
+                    if len(pos) > 12:
+                        lines.append(f"  _...and {len(pos) - 12} more branches._")
+
+                    return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"Pincode lookup error: {e}")
+            return f"⚠️ Pincode lookup error: {e}"
+
+        return f"❌ No postal data found for PIN code `{clean}`."
+
+    # 2. Area / Branch / City Name Lookup
     try:
-        url = f"https://api.postalpincode.in/pincode/{clean}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resp = requests.get(url, headers=headers, timeout=6)
+        encoded = urllib.parse.quote(clean)
+        url = f"https://api.postalpincode.in/postoffice/{encoded}"
+        resp = requests.get(url, headers=headers, timeout=8)
         if resp.status_code == 200:
             data = resp.json()
             if data and data[0].get("Status") == "Success":
-                po = data[0].get("PostOffice", [])[0]
-                return (
-                    f"📮 **India Post Pincode Info (`{clean}`):**\n\n"
-                    f"• **Post Office**: {po.get('Name')}\n"
-                    f"• **District**: {po.get('District')}\n"
-                    f"• **State**: {po.get('State')}\n"
-                    f"• **Branch Type**: {po.get('BranchType')} ({po.get('DeliveryStatus')})\n"
-                    f"• **Circle / Region**: {po.get('Circle')} / {po.get('Region')}"
-                )
-    except Exception as e:
-        logger.warning(f"Pincode lookup error: {e}")
+                pos = data[0].get("PostOffice", [])
+                if not pos:
+                    return f"❌ No postal areas found matching `{clean}`."
 
-    return f"❌ No postal data found for PIN code `{clean}`."
+                lines = [
+                    f"📮 **India Post Area Lookup for \"{clean}\" ({len(pos)} found):**\n"
+                ]
+                for po in pos[:12]:
+                    pincode = po.get("Pincode", "N/A")
+                    name = po.get("Name", "N/A")
+                    dist = po.get("District", "N/A")
+                    state = po.get("State", "N/A")
+                    del_stat = po.get("DeliveryStatus", "")
+                    del_tag = f" • {del_stat}" if del_stat else ""
+                    lines.append(f"• **{name}** — PIN: `{pincode}` ({dist}, {state}{del_tag})")
+
+                if len(pos) > 12:
+                    lines.append(f"\n_Showing top 12 of {len(pos)} areas. Try a more specific location name for exact match._")
+
+                return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"Area pincode lookup error: {e}")
+        return f"⚠️ Area pincode lookup error: {e}"
+
+    return f"❌ No postal areas or PIN codes found matching `{clean}`."
 
 
 def lookup_ifsc(ifsc_code: str) -> str:
@@ -800,3 +857,421 @@ def shorten_url(url: str) -> str:
         logger.warning(f"URL shortener error: {e}")
 
     return f"❌ Failed to shorten URL `{clean}`."
+
+
+# ---------------------------------------------------------------------------
+# 9. Today in History & Daily Milestones
+# ---------------------------------------------------------------------------
+
+def get_today_in_history(date_query: Optional[str] = None) -> str:
+    """Fetches historic events, milestones, and famous births that happened on this day."""
+    now = datetime.now(IST)
+    month = now.month
+    day = now.day
+    date_title = now.strftime("%d %B")
+
+    try:
+        url = f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/selected/{month:02d}/{day:02d}"
+        headers = {"User-Agent": "AlyaBot/1.0 (https://t.me/Alya_Rasa_Bot)"}
+        resp = requests.get(url, headers=headers, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            events = data.get("selected", [])
+            if events:
+                lines = [f"📜 **Today in History — {date_title}**\n"]
+                for ev in events[:4]:
+                    yr = ev.get("year", "N/A")
+                    txt = ev.get("text", "")
+                    lines.append(f"• **{yr}**: {txt}")
+
+                # Also get famous birth
+                births_url = f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/births/{month:02d}/{day:02d}"
+                resp_b = requests.get(births_url, headers=headers, timeout=6)
+                if resp_b.status_code == 200:
+                    b_data = resp_b.json().get("births", [])
+                    if b_data:
+                        b = b_data[0]
+                        lines.append(f"\n🎂 **Famous Birthday**: **{b.get('text')}** (Born {b.get('year')})")
+
+                return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"OnThisDay API error: {e}")
+
+    # Fallback to LLM
+    try:
+        from .llm_provider import LLMProviderManager
+        content, _, _ = LLMProviderManager.call_chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a historical facts expert. Provide 3 major historical events and 1 notable birthday for today's date in crisp bullet points."},
+                {"role": "user", "content": f"What happened today in history on {date_title}?"}
+            ],
+            temperature=0.3,
+            max_tokens=350
+        )
+        if content:
+            return f"📜 **Today in History — {date_title}**:\n\n{_clean_llm_think(content)}"
+    except Exception as ex2:
+        logger.error(f"LLM OnThisDay fallback error: {ex2}")
+
+    return f"⚠️ Unable to fetch historical events for {date_title} right now."
+
+
+# ---------------------------------------------------------------------------
+# 10. Indian PAN & GSTIN Smart Validator
+# ---------------------------------------------------------------------------
+
+PAN_CARD_TYPES = {
+    "P": "Individual (Single Person)",
+    "C": "Company (Private / Public Ltd)",
+    "H": "Hindu Undivided Family (HUF)",
+    "F": "Partnership Firm / LLP",
+    "A": "Association of Persons (AOP)",
+    "T": "Trust",
+    "B": "Body of Individuals (BOI)",
+    "L": "Local Authority / Municipality",
+    "J": "Artificial Juridical Person",
+    "G": "Government Agency / Department"
+}
+
+GSTIN_STATE_CODES = {
+    "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+    "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+    "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+    "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+    "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+    "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
+    "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
+    "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh",
+    "97": "Other Territory", "99": "Centre Jurisdiction"
+}
+
+def validate_pan_card(pan: str) -> str:
+    """Validates Indian Permanent Account Number (PAN) and analyzes structure."""
+    clean = pan.strip().upper()
+    if not clean:
+        return "Usage: `/pan <10-character PAN>`\nExample: `/pan ABCDE1234F`"
+
+    if len(clean) != 10 or not re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]$", clean):
+        return (
+            f"❌ **Invalid PAN Card Format (`{clean}`):**\n\n"
+            f"• An Indian PAN must be exactly 10 characters.\n"
+            f"• Structure: `5 Letters` + `4 Digits` + `1 Letter` (e.g. `ABCDE1234F`).\n"
+            f"• Please check the number and try again."
+        )
+
+    entity_code = clean[3]
+    surname_char = clean[4]
+    entity_desc = PAN_CARD_TYPES.get(entity_code, "Special Entity")
+
+    return (
+        f"💳 **PAN Card Verification & Structure Breakdown:**\n\n"
+        f"• **PAN Number**: `{clean}`\n"
+        f"• **Status**: 🟢 **Valid PAN Format & Structure**\n"
+        f"• **Cardholder / Entity Type**: **{entity_desc}** (Code: `{entity_code}`)\n"
+        f"• **Surname / Entity Initial**: `{surname_char}`\n"
+        f"• **Series Sequence**: `{clean[:3]}` | Digits: `{clean[5:9]}` | Check-Char: `{clean[9]}`\n\n"
+        f"_Note: Format verification conforms to Income Tax Department (ITD) rules._"
+    )
+
+
+def validate_gstin(gstin: str) -> str:
+    """Validates Indian Goods and Services Tax Identification Number (GSTIN)."""
+    clean = gstin.strip().upper()
+    if not clean:
+        return "Usage: `/gstin <15-digit GSTIN>`\nExample: `/gstin 27ABCDE1234F1Z5`"
+
+    if len(clean) != 15 or not re.match(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$", clean):
+        return (
+            f"❌ **Invalid GSTIN Format (`{clean}`):**\n\n"
+            f"• Indian GSTIN must be exactly 15 characters.\n"
+            f"• Format: `2-Digit State Code` + `10-Digit PAN` + `Entity Code` + `Z` + `Checksum`.\n"
+            f"• Example: `27ABCDE1234F1Z5`"
+        )
+
+    state_code = clean[:2]
+    extracted_pan = clean[2:12]
+    entity_code = clean[12]
+    checksum = clean[14]
+
+    state_name = GSTIN_STATE_CODES.get(state_code, "Unknown State Code")
+    entity_type = PAN_CARD_TYPES.get(extracted_pan[3], "Business Entity")
+
+    return (
+        f"🏢 **GSTIN Verification & Structure Breakdown:**\n\n"
+        f"• **GSTIN Number**: `{clean}`\n"
+        f"• **Status**: 🟢 **Valid GSTIN Structure**\n"
+        f"• **State / Jurisdiction**: **{state_name}** (State Code: `{state_code}`)\n"
+        f"• **Linked PAN**: `{extracted_pan}`\n"
+        f"• **Entity Category**: **{entity_type}**\n"
+        f"• **State Registration Index**: #{entity_code}\n"
+        f"• **Checksum Digit**: `{checksum}`\n\n"
+        f"_Conforms to GST Council India format specifications._"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 11. Universal Unit & Land Area Converter
+# ---------------------------------------------------------------------------
+
+def convert_universal_unit(query: str) -> str:
+    """Universal converter for Indian Land Area, Length, Weight, Temp, Speed, Digital Data."""
+    clean = query.strip()
+    if not clean:
+        return (
+            "📐 **Universal Unit Converter Usage:**\n\n"
+            "• `/unit <val> <from_unit> to <to_unit>`\n"
+            "• **Indian Land**: `/unit 2 bigha to sqft`, `/unit 5 acre to bigha`, `/unit 10 guntha to sqyd`\n"
+            "• **Weight/Mass**: `/unit 50 kg to lbs`, `/unit 10 tola to grams`\n"
+            "• **Length**: `/unit 100 km to miles`, `/unit 6 feet to cm`\n"
+            "• **Temperature**: `/unit 100 f to c`, `/unit 37 c to f`\n"
+            "• **Digital**: `/unit 500 gb to mb`, `/unit 2 tb to gb`"
+        )
+
+    area_to_sqft = {
+        "sqft": 1.0, "sq_ft": 1.0, "square_feet": 1.0, "ft2": 1.0,
+        "sqyd": 9.0, "sq_yd": 9.0, "gaj": 9.0, "square_yard": 9.0, "yd2": 9.0,
+        "sqm": 10.7639, "sq_m": 10.7639, "square_meter": 10.7639, "m2": 10.7639,
+        "acre": 43560.0, "acres": 43560.0,
+        "hectare": 107639.1, "hectares": 107639.1, "ha": 107639.1,
+        "bigha": 27225.0, "bighas": 27225.0,
+        "guntha": 1089.0, "gunthas": 1089.0, "guntas": 1089.0,
+        "biswa": 1361.25, "biswas": 1361.25,
+        "katha": 720.0, "kathas": 720.0, "cottah": 720.0,
+        "ground": 2400.0, "grounds": 2400.0
+    }
+
+    weight_to_g = {
+        "mg": 0.001, "milligram": 0.001,
+        "g": 1.0, "gram": 1.0, "grams": 1.0,
+        "kg": 1000.0, "kilogram": 1000.0, "kgs": 1000.0,
+        "quintal": 100000.0, "quintals": 100000.0,
+        "tonne": 1000000.0, "ton": 1000000.0, "tonnes": 1000000.0,
+        "lb": 453.592, "lbs": 453.592, "pound": 453.592, "pounds": 453.592,
+        "oz": 28.3495, "ounce": 28.3495, "ounces": 28.3495,
+        "tola": 11.6638, "tolas": 11.6638
+    }
+
+    length_to_m = {
+        "mm": 0.001, "cm": 0.01, "m": 1.0, "meter": 1.0, "meters": 1.0,
+        "km": 1000.0, "kilometer": 1000.0, "kms": 1000.0,
+        "inch": 0.0254, "inches": 0.0254, "in": 0.0254,
+        "ft": 0.3048, "foot": 0.3048, "feet": 0.3048,
+        "yard": 0.9144, "yards": 0.9144, "yd": 0.9144,
+        "mile": 1609.344, "miles": 1609.344,
+        "nm": 1852.0, "nautical_mile": 1852.0
+    }
+
+    pattern = r"^([0-9.]+)\s*([a-zA-Z_]+)\s*(?:to|in|=)?\s*([a-zA-Z_]+)$"
+    m = re.match(pattern, clean.lower())
+    if m:
+        val = float(m.group(1))
+        from_u = m.group(2).strip()
+        to_u = m.group(3).strip()
+
+        if from_u in area_to_sqft and to_u in area_to_sqft:
+            sqft = val * area_to_sqft[from_u]
+            res = sqft / area_to_sqft[to_u]
+            return f"📐 **Land Area Conversion:**\n\n• `{val:,.4g} {from_u}` = **`{res:,.4g} {to_u}`**\n• _(Equivalent to `{sqft:,.2f}` Sq. Feet / `{sqft/43560:,.4f}` Acres)_"
+
+        if from_u in weight_to_g and to_u in weight_to_g:
+            g = val * weight_to_g[from_u]
+            res = g / weight_to_g[to_u]
+            return f"⚖️ **Weight / Mass Conversion:**\n\n• `{val:,.4g} {from_u}` = **`{res:,.4g} {to_u}`**\n• _(Base: `{g:,.2f}` grams / `{g/1000:,.4f}` kg)_"
+
+        if from_u in length_to_m and to_u in length_to_m:
+            meters = val * length_to_m[from_u]
+            res = meters / length_to_m[to_u]
+            return f"📏 **Length / Distance Conversion:**\n\n• `{val:,.4g} {from_u}` = **`{res:,.4g} {to_u}`**\n• _(Base: `{meters:,.2f}` meters)_"
+
+        if from_u in ["c", "celsius"] and to_u in ["f", "fahrenheit"]:
+            res = (val * 9/5) + 32
+            return f"🌡️ **Temperature Conversion:**\n\n• `{val:,.2f} °C` = **`{res:,.2f} °F`**"
+        if from_u in ["f", "fahrenheit"] and to_u in ["c", "celsius"]:
+            res = (val - 32) * 5/9
+            return f"🌡️ **Temperature Conversion:**\n\n• `{val:,.2f} °F` = **`{res:,.2f} °C`**"
+
+    try:
+        from .llm_provider import LLMProviderManager
+        content, _, _ = LLMProviderManager.call_chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a precise scientific unit conversion calculator. Calculate exact conversion. Output result in 2 crisp bullet points with formulas."},
+                {"role": "user", "content": f"Convert: {clean}"}
+            ],
+            temperature=0.1,
+            max_tokens=200
+        )
+        if content:
+            return f"📐 **Unit Conversion Result:**\n\n{_clean_llm_think(content)}"
+    except Exception as e:
+        logger.error(f"Unit conversion fallback error: {e}")
+
+    return f"⚠️ Unable to parse unit conversion for `{clean}`. Format: `/unit 5 acre to bigha`"
+
+
+# ---------------------------------------------------------------------------
+# 12. Daily Horoscope & Zodiac Insights
+# ---------------------------------------------------------------------------
+
+ZODIAC_SIGNS = {
+    "aries": ("Aries ♈", "Mesh (मेष)"),
+    "mesh": ("Aries ♈", "Mesh (मेष)"),
+    "taurus": ("Taurus ♉", "Vrishabh (वृषभ)"),
+    "vrishabh": ("Taurus ♉", "Vrishabh (वृषभ)"),
+    "gemini": ("Gemini ♊", "Mithun (मिथुन)"),
+    "mithun": ("Gemini ♊", "Mithun (मिथुन)"),
+    "cancer": ("Cancer ♋", "Kark (कर्क)"),
+    "kark": ("Cancer ♋", "Kark (कर्क)"),
+    "leo": ("Leo ♌", "Singh (सिंह)"),
+    "singh": ("Leo ♌", "Singh (सिंह)"),
+    "simha": ("Leo ♌", "Singh (सिंह)"),
+    "virgo": ("Virgo ♍", "Kanya (कन्या)"),
+    "kanya": ("Virgo ♍", "Kanya (कन्या)"),
+    "libra": ("Libra ♎", "Tula (तुला)"),
+    "tula": ("Libra ♎", "Tula (तुला)"),
+    "scorpio": ("Scorpio ♏", "Vrishchik (वृश्चिक)"),
+    "vrishchik": ("Scorpio ♏", "Vrishchik (वृश्चिक)"),
+    "sagittarius": ("Sagittarius ♐", "Dhanu (धनु)"),
+    "dhanu": ("Sagittarius ♐", "Dhanu (धनु)"),
+    "capricorn": ("Capricorn ♑", "Makar (मकर)"),
+    "makar": ("Capricorn ♑", "Makar (मकर)"),
+    "aquarius": ("Aquarius ♒", "Kumbh (कुंभ)"),
+    "kumbh": ("Aquarius ♒", "Kumbh (कुंभ)"),
+    "pisces": ("Pisces ♓", "Meen (मीन)"),
+    "meen": ("Pisces ♓", "Meen (मीन)")
+}
+
+def get_daily_horoscope(sign: str) -> str:
+    """Generates daily horoscope predictions, lucky numbers, and astrological guidance."""
+    clean = sign.strip().lower()
+    if not clean or clean not in ZODIAC_SIGNS:
+        return (
+            "🔮 **Daily Horoscope Usage:**\n\n"
+            "• `/horoscope <zodiac_sign>`\n"
+            "• Supported Signs (English / Hindi):\n"
+            "  `Aries` (Mesh), `Taurus` (Vrishabh), `Gemini` (Mithun), `Cancer` (Kark),\n"
+            "  `Leo` (Singh), `Virgo` (Kanya), `Libra` (Tula), `Scorpio` (Vrishchik),\n"
+            "  `Sagittarius` (Dhanu), `Capricorn` (Makar), `Aquarius` (Kumbh), `Pisces` (Meen)\n\n"
+            "Example: `/horoscope Leo` ya `/horoscope Mesh`"
+        )
+
+    eng_name, hindi_name = ZODIAC_SIGNS[clean]
+    today_date = datetime.now(IST).strftime("%A, %d %B %Y")
+
+    try:
+        from .llm_provider import LLMProviderManager
+        content, _, _ = LLMProviderManager.call_chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an encouraging, insightful astrologer for Alya AI. "
+                        "Generate a crisp, uplifting daily horoscope in Hinglish/English for the requested zodiac sign. "
+                        "Include:\n"
+                        "1. 🌟 **General Outlook & Mood** (2-3 sentences)\n"
+                        "2. 💼 **Career & Finance** (1-2 sentences)\n"
+                        "3. ❤️ **Love & Relationships** (1-2 sentences)\n"
+                        "4. 🎯 **Lucky Color & Lucky Number**\n"
+                        "5. ✨ **Alya's Daily Tip** (1 punchy witty line)"
+                    )
+                },
+                {"role": "user", "content": f"Give daily horoscope for {eng_name} ({hindi_name}) for date {today_date}."}
+            ],
+            temperature=0.7,
+            max_tokens=400
+        )
+        if content:
+            return (
+                f"🔮 **Daily Horoscope — {eng_name} / {hindi_name}**\n"
+                f"🗓️ **Date**: `{today_date}`\n\n"
+                f"{_clean_llm_think(content)}"
+            )
+    except Exception as e:
+        logger.error(f"Horoscope generation error: {e}")
+
+    return f"⚠️ Unable to generate horoscope reading for `{sign}` right now. Please try again in a moment."
+
+
+# ---------------------------------------------------------------------------
+# 13. Tech & Hacker News Top Digest
+# ---------------------------------------------------------------------------
+
+def get_tech_hackernews_digest() -> str:
+    """Fetches top 5 trending tech and startup discussions from Hacker News."""
+    try:
+        top_ids_url = "https://hacker-news.firebaseio.com/v0/topstories.json"
+        resp = requests.get(top_ids_url, timeout=6)
+        if resp.status_code == 200:
+            story_ids = resp.json()[:5]
+            stories = []
+            for s_id in story_ids:
+                item_url = f"https://hacker-news.firebaseio.com/v0/item/{s_id}.json"
+                i_resp = requests.get(item_url, timeout=4)
+                if i_resp.status_code == 200:
+                    item = i_resp.json()
+                    title = item.get("title", "No Title")
+                    score = item.get("score", 0)
+                    comments = item.get("descendants", 0)
+                    url = item.get("url", f"https://news.ycombinator.com/item?id={s_id}")
+                    by = item.get("by", "unknown")
+                    domain = url.split("/")[2].replace("www.", "") if "://" in url else "news.ycombinator.com"
+                    stories.append(
+                        f"• 🚀 **[{title}]({url})**\n"
+                        f"  _(🌐 `{domain}` | ⬆️ `{score}` pts | 💬 `{comments}` comments | By `{by}`)_"
+                    )
+
+            if stories:
+                return (
+                    f"🔥 **Hacker News — Top Trending Tech Stories:**\n\n"
+                    + "\n\n".join(stories) +
+                    "\n\n_Discussion thread: [Hacker News](https://news.ycombinator.com)_"
+                )
+    except Exception as e:
+        logger.warning(f"HackerNews API error: {e}")
+
+    return "⚠️ Could not fetch Hacker News top stories right now."
+
+
+# ---------------------------------------------------------------------------
+# 14. Slang & Idioms Decoder
+# ---------------------------------------------------------------------------
+
+def lookup_slang_or_idiom(term: str) -> str:
+    """Explains internet slangs, Gen-Z jargon, and English idioms with examples and Hindi meaning."""
+    clean = term.strip()
+    if not clean:
+        return (
+            "🗣️ **Slang & Idiom Decoder Usage:**\n\n"
+            "• `/slang <word_or_slang>` — e.g. `/slang rizz`, `/slang no cap`, `/slang delulu`, `/slang sus`\n"
+            "• `/idiom <phrase>` — e.g. `/idiom bite the bullet`, `/idiom spill the beans`"
+        )
+
+    try:
+        from .llm_provider import LLMProviderManager
+        content, _, _ = LLMProviderManager.call_chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert slang and idiom linguist for Alya AI. "
+                        "Explain the given slang, idiom, or internet phrase clearly in modern Hinglish/English. "
+                        "Format your response as:\n"
+                        "• 📖 **Meaning / Definition**: (1-2 clear lines)\n"
+                        "• 🇮🇳 **Hindi / Hinglish Equivalent**: (Desi meaning or relatable phrase)\n"
+                        "• 💬 **Example in Sentence**: (Realistic conversational dialogue)\n"
+                        "• 🔍 **Origin / Cultural Context**: (Brief 1 line on where it originated)"
+                    )
+                },
+                {"role": "user", "content": f"Explain the slang/idiom: \"{clean}\""}
+            ],
+            temperature=0.3,
+            max_tokens=350
+        )
+        if content:
+            return (
+                f"🗣️ **Slang / Idiom Breakdown: `{clean}`**\n\n"
+                f"{_clean_llm_think(content)}"
+            )
+    except Exception as e:
+        logger.error(f"Slang lookup error: {e}")
+
+    return f"⚠️ Could not decode slang `{clean}` right now."

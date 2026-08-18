@@ -40,12 +40,27 @@ def send_telegram_file(chat_id: str, file_path: str, caption: Optional[str] = No
             files = {field_name: (os.path.basename(file_path), f)}
             data = {"chat_id": str(chat_id)}
             if caption:
-                data["caption"] = caption
+                try:
+                    from addons.telegram_channel import format_telegram_markdown
+                    norm_caption = format_telegram_markdown(caption)
+                except Exception:
+                    norm_caption = caption
+                data["caption"] = norm_caption
                 data["parse_mode"] = "Markdown"
+
             resp = requests.post(endpoint, data=data, files=files, timeout=30)
             if resp.status_code == 200:
                 logger.info(f"Successfully sent {file_path} to Telegram chat {chat_id}")
                 return True
+            elif resp.status_code == 400 and caption:
+                # If Telegram Markdown parse error, retry without parse_mode
+                logger.warning(f"Telegram send file markdown failed ({resp.text}), retrying with plain text caption...")
+                f.seek(0)
+                data_plain = {"chat_id": str(chat_id), "caption": caption}
+                resp_plain = requests.post(endpoint, data=data_plain, files={field_name: (os.path.basename(file_path), f)}, timeout=30)
+                if resp_plain.status_code == 200:
+                    return True
+                logger.error(f"Telegram retry send file error: {resp_plain.text}")
             else:
                 logger.error(f"Telegram send file error ({resp.status_code}): {resp.text}")
     except Exception as e:

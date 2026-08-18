@@ -82,11 +82,63 @@ def transcribe_audio_file(audio_path: str) -> Optional[str]:
         return None
 
 
+def format_telegram_markdown(text: Optional[str]) -> str:
+    """
+    Normalizes standard Markdown (CommonMark/LLM generated) into Telegram Legacy Markdown:
+    1. Preserves preformatted code blocks ```...``` and inline code `...`
+    2. Converts Markdown headers (# Heading) to bold (*Heading*)
+    3. Converts standard bold-italic (***text***) to (*_text_*)
+    4. Converts standard bold (**text**) to Telegram legacy bold (*text*)
+    5. Converts double underscore bold (__text__) to Telegram legacy bold (*text*)
+    """
+    if not text:
+        return "" if text is None else str(text)
+
+    # 1. Protect code blocks and inline code
+    code_blocks = []
+    def save_code_block(m):
+        code_blocks.append(m.group(0))
+        return f"TGCODEBLOCK{len(code_blocks)-1}TG"
+
+    text = re.sub(r"```[\s\S]*?```", save_code_block, text)
+
+    inline_codes = []
+    def save_inline_code(m):
+        inline_codes.append(m.group(0))
+        return f"TGINLINECODE{len(inline_codes)-1}TG"
+
+    text = re.sub(r"`[^`\n]+`", save_inline_code, text)
+
+    # 2. Convert markdown headers (###, ##, #) to bold (*Header*)
+    text = re.sub(r"^[ \t]*#{1,6}[ \t]+(.+?)[ \t]*$", r"*\1*", text, flags=re.MULTILINE)
+
+    # 3. Convert standard markdown bold-italic ***text*** -> *_text_*
+    text = re.sub(r"\*\*\*(.+?)\*\*\*", r"*_\1_*", text)
+
+    # 4. Convert standard markdown bold **text** -> *text*
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    text = re.sub(r"(?<![a-zA-Z0-9])__(.+?)__(?![a-zA-Z0-9])", r"*\1*", text)
+
+    # 5. Restore inline codes and code blocks
+    for i, code in enumerate(inline_codes):
+        text = text.replace(f"TGINLINECODE{i}TG", code)
+    for i, code in enumerate(code_blocks):
+        text = text.replace(f"TGCODEBLOCK{i}TG", code)
+
+    return text
+
+
 class SmartTelegramOutput(TelegramOutput):
     """
-    Resilient Telegram OutputChannel that avoids 'Event loop is closed' errors
-    by binding the aiohttp ClientSession to the currently active running event loop.
+    Resilient Telegram OutputChannel that:
+    1. Avoids 'Event loop is closed' errors by binding session to running loop.
+    2. Supports global Markdown parse_mode with automatic normalization.
+    3. Gracefully falls back to plain text if Telegram API entity parsing fails.
     """
+
+    def __init__(self, access_token: Optional[Text], parse_mode: Optional[Text] = "Markdown") -> None:
+        super().__init__(access_token)
+        self._default_parse_mode = parse_mode
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -115,15 +167,124 @@ class SmartTelegramOutput(TelegramOutput):
 
         return self._session
 
+    async def send_text_message(
+        self, recipient_id: Text, text: Text, **kwargs: Any
+    ) -> None:
+        """Sends formatted text message with Markdown parse_mode and fallback."""
+        if not text:
+            return
+
+        formatted_text = format_telegram_markdown(text)
+        max_len = 4000
+        chunks = []
+
+        if len(formatted_text) > max_len:
+            curr = []
+            curr_len = 0
+            for line in formatted_text.split("\n"):
+                if curr_len + len(line) + 1 > max_len:
+                    if curr:
+                        chunks.append("\n".join(curr))
+                    curr = [line]
+                    curr_len = len(line)
+                else:
+                    curr.append(line)
+                    curr_len += len(line) + 1
+            if curr:
+                chunks.append("\n".join(curr))
+        else:
+            chunks = [formatted_text]
+
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            try:
+                await self.send_message(
+                    recipient_id,
+                    chunk,
+                    parse_mode=self._default_parse_mode
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Telegram markdown send_message failed ({e}), falling back to plain text."
+                )
+                try:
+                    await self.send_message(
+                        recipient_id,
+                        chunk,
+                        parse_mode=None
+                    )
+                except Exception as ex2:
+                    logger.error(f"Telegram plain send_message also failed: {ex2}")
+
+    async def send_text_with_buttons(
+        self,
+        recipient_id: Text,
+        text: Text,
+        buttons: List[Dict[Text, Any]],
+        button_type: Optional[Text] = "inline",
+        **kwargs: Any,
+    ) -> None:
+        """Sends text message with buttons, Markdown parsing, and error fallback."""
+        from aiogram.types import (
+            InlineKeyboardMarkup,
+            InlineKeyboardButton,
+            ReplyKeyboardMarkup,
+            KeyboardButton,
+        )
+
+        if button_type == "inline":
+            reply_markup = InlineKeyboardMarkup()
+            button_list = [
+                InlineKeyboardButton(s["title"], callback_data=s["payload"])
+                for s in buttons
+            ]
+            reply_markup.row(*button_list)
+        elif button_type == "vertical":
+            reply_markup = InlineKeyboardMarkup()
+            for s in buttons:
+                reply_markup.row(InlineKeyboardButton(s["title"], callback_data=s["payload"]))
+        elif button_type == "reply":
+            reply_markup = ReplyKeyboardMarkup(resize_keyboard=False, one_time_keyboard=True)
+            for button in buttons:
+                if isinstance(button, list):
+                    reply_markup.add(*(KeyboardButton(s["title"]) for s in button))
+                else:
+                    reply_markup.add(KeyboardButton(button["title"]))
+        else:
+            logger.error(f"Trying to send text with buttons for unknown button type {button_type}")
+            return
+
+        formatted_text = format_telegram_markdown(text)
+        try:
+            await self.send_message(
+                recipient_id,
+                formatted_text,
+                reply_markup=reply_markup,
+                parse_mode=self._default_parse_mode
+            )
+        except Exception as e:
+            logger.warning(f"Telegram markdown send_text_with_buttons failed ({e}), falling back to plain text.")
+            try:
+                await self.send_message(
+                    recipient_id,
+                    formatted_text,
+                    reply_markup=reply_markup,
+                    parse_mode=None
+                )
+            except Exception as ex2:
+                logger.error(f"Telegram plain send_text_with_buttons failed: {ex2}")
+
 
 class SmartTelegramInput(TelegramInput):
     """
     Enhanced Telegram InputChannel that:
     1. Dynamically expands environment variables from credentials.
-    2. Enforces strict Telegram User ID whitelisting across all message types.
-    3. Handles voice messages (Whisper transcription).
-    4. Handles documents (.pdf, .xlsx, .docx) and photos.
-    5. Prevents 'Event loop is closed' errors with SmartTelegramOutput.
+    2. Configures Telegram parse_mode globally.
+    3. Enforces strict Telegram User ID whitelisting across all message types.
+    4. Handles voice messages (Whisper transcription).
+    5. Handles documents (.pdf, .xlsx, .docx) and photos.
+    6. Prevents 'Event loop is closed' errors with SmartTelegramOutput.
     """
 
     @classmethod
@@ -144,13 +305,17 @@ class SmartTelegramInput(TelegramInput):
         raw_webhook = credentials.get("webhook_url") or os.getenv("TELEGRAM_WEBHOOK_URL", "")
         webhook_url = expand_env(raw_webhook) or ""
 
-        return cls(access_token=token, verify=verify, webhook_url=webhook_url)
+        raw_parse_mode = credentials.get("parse_mode") or "Markdown"
+        parse_mode = expand_env(raw_parse_mode) or "Markdown"
+
+        return cls(access_token=token, verify=verify, webhook_url=webhook_url, parse_mode=parse_mode)
 
     def __init__(
         self,
         access_token: Optional[Text] = None,
         verify: Optional[Text] = "Alya_Rasa_Bot",
         webhook_url: Optional[Text] = None,
+        parse_mode: Optional[Text] = "Markdown",
         debug_mode: bool = True,
     ) -> None:
         super().__init__(
@@ -159,6 +324,7 @@ class SmartTelegramInput(TelegramInput):
             webhook_url=webhook_url,
             debug_mode=debug_mode
         )
+        self.parse_mode = parse_mode
         self.is_valid_token = bool(
             self.access_token and re.match(r"^\d+:[A-Za-z0-9_-]+$", self.access_token)
         )
@@ -248,7 +414,7 @@ class SmartTelegramInput(TelegramInput):
             {"command": "recipe", "description": "🍲 Cooking recipe finder"},
             {"command": "riddle", "description": "🧩 Brain teaser riddle"},
             {"command": "pick", "description": "🎯 Random decision / dice / coin"},
-            {"command": "pincode", "description": "📮 India Post PIN code lookup"},
+            {"command": "pincode", "description": "📮 India Post PIN code & area search"},
             {"command": "ifsc", "description": "🏦 Bank branch & IFSC finder"},
             {"command": "shorten", "description": "🔗 Shorten long URL"},
             {"command": "stock", "description": "📈 Live Stock quote (NSE/BSE)"},
@@ -281,7 +447,14 @@ class SmartTelegramInput(TelegramInput):
             {"command": "alarm", "description": "⏰ Set Android system alarm"},
             {"command": "timer", "description": "⏳ Set Android countdown timer"},
             {"command": "open", "description": "📱 Launch Android app or open file"},
-            {"command": "callscreen", "description": "🤖 AI Call screening & attendant"}
+            {"command": "callscreen", "description": "🤖 AI Call screening & attendant"},
+            {"command": "today", "description": "📜 Today in History milestones & birthdays"},
+            {"command": "pan", "description": "💳 Indian PAN Card structure validator"},
+            {"command": "gstin", "description": "🏢 Indian GSTIN number & state validator"},
+            {"command": "unit", "description": "📐 Universal & Land unit converter (Bigha/Acre/SqFt)"},
+            {"command": "horoscope", "description": "🔮 Daily Zodiac & Horoscope guidance"},
+            {"command": "hackernews", "description": "🔥 Hacker News top tech & startup stories"},
+            {"command": "slang", "description": "🗣️ Gen-Z slangs, internet jargon & idioms decoder"}
         ]
         try:
             # 1. Set commands for default scope
@@ -303,7 +476,7 @@ class SmartTelegramInput(TelegramInput):
             logger.warning(f"Error registering Telegram commands menu: {e}")
 
     def get_output_channel(self) -> OutputChannel:
-        return SmartTelegramOutput(self.access_token)
+        return SmartTelegramOutput(self.access_token, parse_mode=self.parse_mode)
 
     def blueprint(
         self, on_new_message: Callable[[UserMessage], Awaitable[Any]]

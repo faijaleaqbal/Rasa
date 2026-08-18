@@ -14,19 +14,36 @@ _SCHEDULER_RUNNING = False
 
 
 def send_telegram_alert(chat_id: str, message: str) -> bool:
-    """Sends a notification message to Telegram."""
+    """Sends a notification message to Telegram with Markdown formatting and error fallback."""
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not bot_token:
         return False
     try:
+        try:
+            from addons.telegram_channel import format_telegram_markdown
+            norm_message = format_telegram_markdown(message)
+        except Exception:
+            norm_message = message
+
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {
             "chat_id": str(chat_id),
-            "text": message,
+            "text": norm_message,
             "parse_mode": "Markdown"
         }
         resp = requests.post(url, json=payload, timeout=10)
-        return resp.status_code == 200
+        if resp.status_code == 200:
+            return True
+        elif resp.status_code == 400:
+            # Fallback to plain text
+            logger.warning(f"Telegram alert markdown failed ({resp.text}), retrying with plain text...")
+            payload_plain = {
+                "chat_id": str(chat_id),
+                "text": message
+            }
+            resp_plain = requests.post(url, json=payload_plain, timeout=10)
+            return resp_plain.status_code == 200
+        return False
     except Exception as e:
         logger.error(f"Failed to send Telegram alert: {e}")
         return False

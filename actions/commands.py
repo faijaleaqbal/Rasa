@@ -48,6 +48,12 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         help_text = (
             "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
             "**🌟 New Advanced Super-Skills:**\n"
+            "• `/today` — Today in History major events, milestones & famous birthdays\n"
+            "• `/pan <pan_no>` & `/gstin <gstin_no>` — Indian PAN Card & GSTIN structure validator\n"
+            "• `/unit <val> <from> to <to>` — Universal & Indian Land Unit converter (Bigha, Acre, Guntha, Gaj, SqFt, Kg)\n"
+            "• `/horoscope <zodiac_sign>` — Daily astrological predictions, career, love & lucky numbers\n"
+            "• `/hackernews` — Top 5 trending tech & startup stories from Hacker News\n"
+            "• `/slang <word_or_idiom>` — Gen-Z slangs, internet jargon & idioms decoder\n"
             "• `/upi <vpa> [amount] [name] [note]` — Instant Dynamic UPI scan-and-pay QR code (GPay/PhonePe/Paytm)\n"
             "• `/search <query>` — Real-time live AI Web Search & Synthesis (Tavily & DDG)\n"
             "• `/transcribe [url_or_file]` — Groq Whisper audio & voice note transcription with AI summary\n"
@@ -121,7 +127,7 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
             "**⏱️ Daily Productivity & Indian Services:**\n"
             "• `/qr <text_or_url>` — Generate HD QR code image\n"
             "• `/barcode <number>` — Generate Code128 barcode image\n"
-            "• `/pincode <pin>` — India Post office & district lookup\n"
+            "• `/pincode <pin_or_area>` — India Post PIN code & area/branch lookup\n"
             "• `/ifsc <code>` — Bank branch & IFSC finder (Razorpay API)\n"
             "• `/shorten <url>` — Create short TinyURL link\n"
             "• `/remind <time> <msg>` — Time-based reminder scheduler\n"
@@ -856,5 +862,33 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         if not args_str:
             return {"handled": True, "text": "Usage: `/ocr <image_url_or_path>`\nExample: `/ocr https://example.com/receipt.png` or send a photo directly in chat!"}
         return {"handled": True, "text": adv.extract_ocr_text(args_str)}
+
+    # 109. /today or /history
+    elif cmd in ["/today", "/history", "/onthisday", "/dayinhistory"]:
+        return {"handled": True, "text": ext.get_today_in_history(args_str)}
+
+    # 110. /pan <pan_number>
+    elif cmd in ["/pan", "/pancard", "/checkpan"]:
+        return {"handled": True, "text": ext.validate_pan_card(args_str)}
+
+    # 111. /gstin <gstin_number> or /gst <gstin_number>
+    elif cmd in ["/gstin", "/gst", "/checkgst"]:
+        return {"handled": True, "text": ext.validate_gstin(args_str)}
+
+    # 112. /unit <query> or /convertunit
+    elif cmd in ["/unit", "/convertunit", "/units", "/areaconvert"]:
+        return {"handled": True, "text": ext.convert_universal_unit(args_str)}
+
+    # 113. /horoscope <sign> or /zodiac <sign> or /rashi
+    elif cmd in ["/horoscope", "/zodiac", "/rashi", "/kundali", "/astrology"]:
+        return {"handled": True, "text": ext.get_daily_horoscope(args_str)}
+
+    # 114. /hackernews or /hn or /trending
+    elif cmd in ["/hackernews", "/hn", "/technews", "/techheadlines"]:
+        return {"handled": True, "text": ext.get_tech_hackernews_digest()}
+
+    # 115. /slang <term> or /idiom <term>
+    elif cmd in ["/slang", "/idiom", "/phrase", "/jargon", "/slangmeaning"]:
+        return {"handled": True, "text": ext.lookup_slang_or_idiom(args_str)}
 
     return {"handled": False}
