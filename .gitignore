@@ -25,3 +25,4 @@ android_app/local.properties
 # System files
 .DS_Store
 *.log
+results/

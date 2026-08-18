@@ -48,6 +48,9 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
         help_text = (
             "✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n\n"
             "**🌟 New Advanced Super-Skills:**\n"
+            "• `/adduser <user_id> [name]` — (Admin) Grant bot access to a Telegram user\n"
+            "• `/removeuser <user_id>` — (Admin) Revoke bot access for a Telegram user\n"
+            "• `/users` — (Admin) List all authorized Telegram users\n"
             "• `/today` — Today in History major events, milestones & famous birthdays\n"
             "• `/pan <pan_no>` & `/gstin <gstin_no>` — Indian PAN Card & GSTIN structure validator\n"
             "• `/unit <val> <from> to <to>` — Universal & Indian Land Unit converter (Bigha, Acre, Guntha, Gaj, SqFt, Kg)\n"
@@ -890,5 +893,104 @@ def handle_slash_command(command_text: str, user_id: str, chat_id: str) -> Dict[
     # 115. /slang <term> or /idiom <term>
     elif cmd in ["/slang", "/idiom", "/phrase", "/jargon", "/slangmeaning"]:
         return {"handled": True, "text": ext.lookup_slang_or_idiom(args_str)}
+
+    # 116. /adduser <user_id> [name] (Admin only)
+    elif cmd in ["/adduser", "/authuser", "/grantuser", "/allowuser"]:
+        if not db.is_admin_user(str(user_id)):
+            return {"handled": True, "text": "⚠️ **Access Denied:** Only bot administrators can grant user access."}
+
+        if not args_str:
+            return {
+                "handled": True,
+                "text": (
+                    "👤 **Add Authorized User Usage:**\n"
+                    "• `/adduser <numeric_telegram_user_id> [name_or_note]`\n\n"
+                    "**Examples:**\n"
+                    "• `/adduser 123456789 John`\n"
+                    "• `/adduser 987654321`\n\n"
+                    "_Tip: Forward any message from the user to @userinfobot or check server logs to get their numeric ID._"
+                )
+            }
+
+        parts = args_str.split(maxsplit=1)
+        target_uid = parts[0].strip()
+        target_name = parts[1].strip() if len(parts) > 1 else ""
+
+        if not target_uid.isdigit():
+            return {
+                "handled": True,
+                "text": "❌ **Invalid User ID:** Telegram user ID must be numeric (e.g. `123456789`)."
+            }
+
+        success = db.add_authorized_user(target_uid, name=target_name, added_by=str(user_id))
+        if success:
+            label = f" ({target_name})" if target_name else ""
+            return {
+                "handled": True,
+                "text": f"✅ **User Authorized!**\nTelegram User ID `{target_uid}`{label} ab bot use kar sakta hai."
+            }
+        else:
+            return {"handled": True, "text": "❌ Failed to authorize user. Check server logs."}
+
+    # 120. /removeuser <user_id> (Admin only)
+    elif cmd in ["/removeuser", "/deluser", "/deleteuser", "/revokeuser"]:
+        if not db.is_admin_user(str(user_id)):
+            return {"handled": True, "text": "⚠️ **Access Denied:** Only bot administrators can revoke user access."}
+
+        if not args_str:
+            return {
+                "handled": True,
+                "text": (
+                    "🚫 **Remove Authorized User Usage:**\n"
+                    "• `/removeuser <numeric_telegram_user_id>`\n\n"
+                    "**Example:** `/removeuser 123456789`"
+                )
+            }
+
+        target_uid = args_str.split()[0].strip()
+        admin_ids = db.get_admin_user_ids()
+        if target_uid in admin_ids:
+            return {
+                "handled": True,
+                "text": f"⚠️ Cannot remove primary administrator `{target_uid}` configured in environment variables."
+            }
+
+        removed = db.remove_authorized_user(target_uid)
+        if removed:
+            return {
+                "handled": True,
+                "text": f"✅ **Access Revoked!**\nUser `{target_uid}` ko authorized list se remove kar diya gaya hai."
+            }
+        else:
+            return {
+                "handled": True,
+                "text": f"⚠️ User `{target_uid}` authorized list me nahi mila. Use `/users` to list current users."
+            }
+
+    # 121. /users or /listusers (Admin only)
+    elif cmd in ["/users", "/listusers", "/authusers", "/allowedusers"]:
+        if not db.is_admin_user(str(user_id)):
+            return {"handled": True, "text": "⚠️ **Access Denied:** Only bot administrators can view the user directory."}
+
+        admins = db.get_admin_user_ids()
+        db_users = db.get_authorized_users()
+
+        lines = ["👥 **Alya Bot — Authorized Users Directory:**\n"]
+        lines.append("**👑 Primary Administrators (.env):**")
+        if admins:
+            for a in admins:
+                lines.append(f"• `{a}` *(Superadmin)*")
+        else:
+            lines.append("• _Open access (No restriction configured)_")
+
+        lines.append("\n**👤 Dynamically Authorized Users (SQLite DB):**")
+        if db_users:
+            for u in db_users:
+                uname = f" — *{u.get('name')}*" if u.get('name') else ""
+                lines.append(f"• `{u.get('user_id')}`{uname} (Added by `{u.get('added_by')}` on {str(u.get('created_at'))[:16]})")
+        else:
+            lines.append("• _No additional users added yet. Use `/adduser <id>` to grant access._")
+
+        return {"handled": True, "text": "\n".join(lines)}
 
     return {"handled": False}

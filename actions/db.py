@@ -170,6 +170,16 @@ def init_db() -> None:
         )
     """)
 
+    # 12. Authorized Telegram Users
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS authorized_users (
+            user_id TEXT PRIMARY KEY,
+            name TEXT DEFAULT '',
+            added_by TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
     logger.info("Database initialized successfully.")
@@ -643,3 +653,95 @@ def get_user_files(user_id: str) -> List[Dict[str, Any]]:
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return rows
+
+
+# -------------------------------------------------------------
+# User Authorization & Access Control
+# -------------------------------------------------------------
+def add_authorized_user(user_id: str, name: str = "", added_by: str = "") -> bool:
+    """Grants bot usage permission to a Telegram user ID."""
+    clean_uid = str(user_id).strip()
+    if not clean_uid or not clean_uid.isdigit():
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO authorized_users (user_id, name, added_by, created_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        """,
+        (clean_uid, name.strip(), str(added_by).strip())
+    )
+    conn.commit()
+    conn.close()
+    logger.info(f"Authorized user {clean_uid} ({name}) added by {added_by}")
+    return True
+
+
+def remove_authorized_user(user_id: str) -> bool:
+    """Revokes bot usage permission for a Telegram user ID."""
+    clean_uid = str(user_id).strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM authorized_users WHERE user_id = ?", (clean_uid,))
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    if affected:
+        logger.info(f"Authorized user {clean_uid} removed from database.")
+    return affected
+
+
+def get_authorized_users() -> List[Dict[str, Any]]:
+    """Returns list of all dynamically authorized users."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM authorized_users ORDER BY created_at ASC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_admin_user_ids() -> List[str]:
+    """Returns primary owner/admin user IDs from environment."""
+    env_admins = os.getenv("ALLOWED_TELEGRAM_USER_ID", "") or os.getenv("ADMIN_TELEGRAM_USER_ID", "")
+    return [uid.strip() for uid in env_admins.split(",") if uid.strip()]
+
+
+def is_admin_user(user_id: str) -> bool:
+    """Verifies if the requester is an authorized administrator."""
+    clean_uid = str(user_id).strip()
+    admins = get_admin_user_ids()
+    if not admins:
+        return True  # If no admin configured, grant access
+    return clean_uid in admins
+
+
+def is_user_authorized(user_id: str) -> bool:
+    """
+    Checks if a user has access to interact with the bot:
+    1. If no ALLOWED_TELEGRAM_USER_ID is set, all users allowed.
+    2. If user_id is in ALLOWED_TELEGRAM_USER_ID / admin list -> Authorized.
+    3. If user_id is in SQLite authorized_users table -> Authorized.
+    """
+    clean_uid = str(user_id).strip()
+    admins = get_admin_user_ids()
+
+    # If no restrictions are configured in .env and no DB users, open access
+    if not admins:
+        return True
+
+    # 1. Superadmin check
+    if clean_uid in admins:
+        return True
+
+    # 2. Database whitelist check
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM authorized_users WHERE user_id = ?", (clean_uid,))
+    found = cursor.fetchone() is not None
+    conn.close()
+    return found
+
+

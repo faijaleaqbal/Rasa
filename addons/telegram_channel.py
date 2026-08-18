@@ -345,6 +345,9 @@ class SmartTelegramInput(TelegramInput):
         """Registers the native Telegram commands menu (the [/] button next to chat input)."""
         commands = [
             {"command": "help", "description": "📖 List all commands & skills"},
+            {"command": "adduser", "description": "👤 Grant bot access to Telegram user ID"},
+            {"command": "removeuser", "description": "🚫 Revoke bot access for Telegram user ID"},
+            {"command": "users", "description": "📋 List all authorized users"},
             {"command": "weather", "description": "🌤️ Real-time weather lookup"},
             {"command": "news", "description": "🗞️ Latest news digest & headlines"},
             {"command": "currency", "description": "💱 Currency exchange conversion"},
@@ -628,17 +631,15 @@ class SmartTelegramInput(TelegramInput):
                 sender_id = msg.chat.id
 
                 # 3. User Whitelist Check (BEFORE any NLU, Core, or Groq LLM processing)
-                allowed_user_id_env = os.getenv("ALLOWED_TELEGRAM_USER_ID", "").strip()
-                if allowed_user_id_env:
-                    allowed_ids = [uid.strip() for uid in allowed_user_id_env.split(",") if uid.strip()]
-                    if str(user_id) not in allowed_ids:
-                        logger.info(
-                            f"[SECURITY] Unauthorized Telegram user blocked: user_id={user_id}, "
-                            f"username={getattr(getattr(msg, 'from_user', None), 'username', 'unknown')}. "
-                            f"Silently dropping message without invoking NLU/LLM."
-                        )
-                        # Silently drop the message - return HTTP 200 OK so Telegram doesn't resend
-                        return response.text("success")
+                from actions import db as app_db
+                if not app_db.is_user_authorized(str(user_id)):
+                    logger.info(
+                        f"[SECURITY] Unauthorized Telegram user blocked: user_id={user_id}, "
+                        f"username={getattr(getattr(msg, 'from_user', None), 'username', 'unknown')}. "
+                        f"Silently dropping message without invoking NLU/LLM."
+                    )
+                    # Silently drop the message - return HTTP 200 OK so Telegram doesn't resend
+                    return response.text("success")
 
                 # 3.5 Direct Slash Command Dispatcher (Instant execution & file delivery)
                 if text and text.startswith("/") and text not in [INTENT_MESSAGE_PREFIX + USER_INTENT_RESTART]:
