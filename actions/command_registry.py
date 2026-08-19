@@ -78,8 +78,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Remove GPS location and camera tags from photos for privacy",
         category="🖼️ Image Tools & Passport Studio",
         aliases=["stripexif", "cleanphoto"],
-        native_menu=True,
-        menu_description="🛡️ Strip photo GPS & camera metadata"
+        native_menu=False
     ),
 
     # 🤖 AI & Super-Skills
@@ -197,8 +196,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Merge multiple PDF documents into a single PDF",
         category="🤖 AI & Super-Skills",
         aliases=["pdfmerge", "combinepdf"],
-        native_menu=True,
-        menu_description="📄 Merge multiple PDF files into one"
+        native_menu=False
     ),
     CommandInfo(
         name="splitpdf",
@@ -206,8 +204,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Extract page ranges from PDF document",
         category="🤖 AI & Super-Skills",
         aliases=["pdfsplit", "extractpdf"],
-        native_menu=True,
-        menu_description="📄 Extract page ranges from PDF document"
+        native_menu=False
     ),
     CommandInfo(
         name="phish",
@@ -215,8 +212,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Anti-phishing, fake bank trap & link safety scanner",
         category="🤖 AI & Super-Skills",
         aliases=["safelink", "urlcheck", "scanlink"],
-        native_menu=True,
-        menu_description="🛡️ Anti-phishing link & site scanner"
+        native_menu=False
     ),
     CommandInfo(
         name="ping",
@@ -224,8 +220,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Server uptime & TCP latency ping",
         category="🤖 AI & Super-Skills",
         aliases=["latency", "hostping"],
-        native_menu=True,
-        menu_description="🏓 Server uptime & TCP latency ping"
+        native_menu=False
     ),
     CommandInfo(
         name="ssl",
@@ -233,8 +228,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Real-time SSL certificate validity, expiry countdown & cipher check",
         category="🤖 AI & Super-Skills",
         aliases=["tls", "cert", "certificate"],
-        native_menu=True,
-        menu_description="🔒 SSL certificate validity check"
+        native_menu=False
     ),
     CommandInfo(
         name="whois",
@@ -242,8 +236,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="ICANN RDAP domain registrar, registration & expiry lookup",
         category="🤖 AI & Super-Skills",
         aliases=["rdap", "domain"],
-        native_menu=True,
-        menu_description="🌐 Domain registration & WHOIS lookup"
+        native_menu=False
     ),
 
     # 📱 Mobile & Android Automation
@@ -351,7 +344,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Full interactive skills directory catalog",
         category="📱 Mobile & Android Automation",
         aliases=["directory", "allskills"],
-        native_menu=False
+        native_menu=True,
+        menu_description="🌟 Full interactive skills catalog"
     ),
 
     # 🇮🇳 Indian Utilities & Markets
@@ -459,8 +453,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Instant Indian Nifty 50 index snapshot",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["nifty50"],
-        native_menu=True,
-        menu_description="📊 Nifty 50 live index snapshot"
+        native_menu=False
     ),
     CommandInfo(
         name="sensex",
@@ -468,8 +461,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Instant Indian BSE Sensex index snapshot",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["bse"],
-        native_menu=True,
-        menu_description="📊 BSE Sensex live index snapshot"
+        native_menu=False
     ),
     CommandInfo(
         name="gold",
@@ -486,8 +478,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Daily Petrol, Diesel & CNG prices",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["petrol", "diesel"],
-        native_menu=True,
-        menu_description="⛽ Daily Petrol & Diesel rates"
+        native_menu=False
     ),
     CommandInfo(
         name="ipo",
@@ -495,8 +486,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Indian Mainboard & SME IPO Calendar & Grey Market Premium (GMP)",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["ipogmp", "ipos"],
-        native_menu=True,
-        menu_description="📈 Live Indian IPO Calendar & GMP"
+        native_menu=False
     ),
     CommandInfo(
         name="aqi",
@@ -524,8 +514,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="View active scheduled reminders",
         category="⏱️ Reminders & Productivity",
         aliases=["myreminders", "listreminders", "active_reminders"],
-        native_menu=True,
-        menu_description="📋 List active scheduled reminders"
+        native_menu=False
     ),
     CommandInfo(
         name="delremind",
@@ -533,8 +522,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Cancel active scheduled reminder",
         category="⏱️ Reminders & Productivity",
         aliases=["delreminder", "cancelreminder", "rmremind"],
-        native_menu=True,
-        menu_description="❌ Cancel active scheduled reminder"
+        native_menu=False
     ),
     CommandInfo(
         name="set_timezone",
@@ -550,8 +538,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/medremind <time> <medicine>",
         description="Scheduled medicine dosage reminders",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
-        menu_description="💊 Medicine dosage reminder"
+        native_menu=False
     ),
     CommandInfo(
         name="note",
@@ -566,8 +553,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/notes [query]",
         description="Search & list saved persistent notes",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
-        menu_description="📋 Search & list saved notes"
+        native_menu=False
     ),
     CommandInfo(
         name="todo",
@@ -582,8 +568,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/todos",
         description="List pending to-do tasks",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
-        menu_description="📌 List pending to-dos"
+        native_menu=False
     ),
     CommandInfo(
         name="habit",
@@ -599,14 +584,16 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="World clock & timezone converter",
         category="⏱️ Reminders & Productivity",
         aliases=["timezone"],
-        native_menu=False
+        native_menu=True,
+        menu_description="🕒 World clock & timezone converter"
     ),
     CommandInfo(
         name="countdown",
         syntax="/countdown <date>",
         description="Event countdown tracker",
         category="⏱️ Reminders & Productivity",
-        native_menu=False
+        native_menu=True,
+        menu_description="⏳ Event countdown timer"
     ),
     CommandInfo(
         name="traffic",
@@ -614,24 +601,21 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Commute ETA & route navigation",
         category="⏱️ Reminders & Productivity",
         aliases=["distance", "eta"],
-        native_menu=True,
-        menu_description="🚗 Commute ETA & route navigation"
+        native_menu=False
     ),
     CommandInfo(
         name="ride",
         syntax="/ride <from> to <to>",
         description="OpenRouteService distance & Ola/Uber fare estimator",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
-        menu_description="🚕 Cab fare & route estimator"
+        native_menu=False
     ),
     CommandInfo(
         name="track",
         syntax="/track <number>",
         description="Speed Post & courier package tracking",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
-        menu_description="📦 Speed Post & parcel tracking"
+        native_menu=False
     ),
 
     # 💻 Developer & MCP Tools
@@ -650,8 +634,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Direct host terminal execution with stdout/stderr",
         category="💻 Developer & MCP Tools",
         aliases=["exec"],
-        native_menu=True,
-        menu_description="⚡ Direct host terminal execution"
+        admin_only=True,
+        native_menu=False
     ),
     CommandInfo(
         name="py",
@@ -659,8 +643,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Python code execution sandbox runner",
         category="💻 Developer & MCP Tools",
         aliases=["python", "run"],
-        native_menu=True,
-        menu_description="🐍 Python code sandbox runner"
+        admin_only=True,
+        native_menu=False
     ),
     CommandInfo(
         name="sql",
@@ -668,8 +652,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="SQLite database query & table inspector",
         category="💻 Developer & MCP Tools",
         aliases=["db", "database"],
-        native_menu=True,
-        menu_description="🗄️ SQLite database query explorer"
+        admin_only=True,
+        native_menu=False
     ),
     CommandInfo(
         name="kg",
@@ -677,7 +661,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Knowledge Graph & relational memory explorer",
         category="💻 Developer & MCP Tools",
         aliases=["knowledge", "relations"],
-        native_menu=False
+        native_menu=True,
+        menu_description="🧠 Knowledge Graph memory"
     ),
     CommandInfo(
         name="github",
@@ -702,8 +687,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Twitter/X, Reddit post content extractor",
         category="💻 Developer & MCP Tools",
         aliases=["tweet", "post"],
-        native_menu=True,
-        menu_description="🐦 Social media post extractor"
+        native_menu=False
     ),
     CommandInfo(
         name="log",
@@ -711,6 +695,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Inspect live server & bot logs",
         category="💻 Developer & MCP Tools",
         aliases=["logs", "syslog"],
+        admin_only=True,
         native_menu=False
     ),
     CommandInfo(
@@ -719,23 +704,22 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="EC2 CPU, RAM, Disk health",
         category="💻 Developer & MCP Tools",
         aliases=["health", "status"],
-        native_menu=True,
-        menu_description="🖥️ EC2 CPU/RAM/Disk health"
+        native_menu=False
     ),
     CommandInfo(
         name="speedtest",
         syntax="/speedtest",
         description="Internet speed test runner",
         category="💻 Developer & MCP Tools",
-        native_menu=True,
-        menu_description="⚡ Internet speed test"
+        native_menu=False
     ),
     CommandInfo(
         name="dns",
         syntax="/dns <domain>",
         description="DNS records (A, MX, NS, TXT) lookup",
         category="💻 Developer & MCP Tools",
-        native_menu=False
+        native_menu=True,
+        menu_description="🌐 DNS records lookup"
     ),
     CommandInfo(
         name="http",
@@ -757,14 +741,16 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/json <text>",
         description="Format, minify & validate JSON",
         category="💻 Developer & MCP Tools",
-        native_menu=False
+        native_menu=True,
+        menu_description="🔧 Format & validate JSON"
     ),
     CommandInfo(
         name="ip",
         syntax="/ip [ip_address]",
         description="Geo-IP location, ISP & ASN lookup",
         category="💻 Developer & MCP Tools",
-        native_menu=False
+        native_menu=True,
+        menu_description="🌐 Geo-IP location lookup"
     ),
 
     # 📁 Documents, Resumes & Formats
@@ -833,7 +819,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/gmail [query]",
         description="Live Gmail messages reader",
         category="📁 Documents, Resumes & Formats",
-        native_menu=False
+        native_menu=True,
+        menu_description="✉️ Read Gmail messages"
     ),
     CommandInfo(
         name="outlook",
@@ -847,14 +834,16 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/drive [query]",
         description="Google Drive search",
         category="📁 Documents, Resumes & Formats",
-        native_menu=False
+        native_menu=True,
+        menu_description="📁 Google Drive file search"
     ),
     CommandInfo(
         name="calendar",
         syntax="/calendar",
         description="Google Calendar schedule",
         category="📁 Documents, Resumes & Formats",
-        native_menu=False
+        native_menu=True,
+        menu_description="📅 Google Calendar schedule"
     ),
 
     # 🔐 Privacy, Security & Web APIs
@@ -872,23 +861,22 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/hash <text>",
         description="MD5, SHA-1, SHA-256, Base64 converter",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
-        menu_description="🔑 MD5/SHA-256 converter"
+        native_menu=False
     ),
     CommandInfo(
         name="unshorten",
         syntax="/unshorten <url>",
         description="Safe URL redirect expander",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
-        menu_description="🔍 Expand shortened URL"
+        native_menu=False
     ),
     CommandInfo(
         name="shorten",
         syntax="/shorten <url>",
         description="Create short TinyURL link",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=False
+        native_menu=True,
+        menu_description="🔗 Shorten URL with TinyURL"
     ),
     CommandInfo(
         name="tempmail",
@@ -904,16 +892,14 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/checkmail <login> <domain>",
         description="Check temporary inbox & OTP messages",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
-        menu_description="📩 Check temporary inbox / OTP"
+        native_menu=False
     ),
     CommandInfo(
         name="breach",
         syntax="/breach <email_or_pwd>",
         description="Data breach check via XposedOrNot & HIBP",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
-        menu_description="🚨 Data breach security check"
+        native_menu=False
     ),
     CommandInfo(
         name="weather",
@@ -953,8 +939,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Multi-chain wallet balance & valuation (ETH/BTC/SOL)",
         category="🔐 Privacy, Security & Web APIs",
         aliases=["balance"],
-        native_menu=True,
-        menu_description="💎 Crypto wallet balance"
+        native_menu=False
     ),
     CommandInfo(
         name="gas",
@@ -1002,7 +987,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/translate <text>",
         description="Dictionary definition & language translation",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=False
+        native_menu=True,
+        menu_description="🌐 Translation & dictionary"
     ),
     CommandInfo(
         name="joke",
@@ -1010,7 +996,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Random clean joke & inspirational quote",
         category="🔐 Privacy, Security & Web APIs",
         aliases=["quote"],
-        native_menu=False
+        native_menu=True,
+        menu_description="😄 Clean joke & inspirational quote"
     ),
     CommandInfo(
         name="math",
@@ -1039,7 +1026,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/shop <product>",
         description="Product & barcode lookup",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=False
+        native_menu=True,
+        menu_description="🛒 Product & barcode lookup"
     ),
 
     # 💰 Financial, Health & Lifestyle
@@ -1064,7 +1052,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/split <amount> <people>",
         description="Restaurant bill & tip splitter",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=False
+        native_menu=True,
+        menu_description="🧾 Bill & tip splitter"
     ),
     CommandInfo(
         name="expense",
@@ -1079,22 +1068,23 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/expenses [month]",
         description="Monthly finance summary & breakdown",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
-        menu_description="📊 Monthly finance summary"
+        native_menu=False
     ),
     CommandInfo(
         name="bill",
         syntax="/bill <name> <due> [amt]",
         description="Add bill reminder alert",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=False
+        native_menu=True,
+        menu_description="⏰ Bill reminder alert"
     ),
     CommandInfo(
         name="bmi",
         syntax="/bmi <weight> <height>",
         description="Body Mass Index & health category",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=False
+        native_menu=True,
+        menu_description="⚖️ Body Mass Index calculator"
     ),
     CommandInfo(
         name="calorie",
@@ -1102,14 +1092,16 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Nutrition, protein, carbs & calorie profile",
         category="💰 Financial, Health & Lifestyle",
         aliases=["nutrition"],
-        native_menu=False
+        native_menu=True,
+        menu_description="🥗 Nutrition & calorie profile"
     ),
     CommandInfo(
         name="water",
         syntax="/water [ml]",
         description="Water hydration logging",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=False
+        native_menu=True,
+        menu_description="💧 Water hydration logger"
     ),
     CommandInfo(
         name="grammar",
@@ -1117,14 +1109,16 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Grammar, tone polish & rewriter",
         category="💰 Financial, Health & Lifestyle",
         aliases=["fix"],
-        native_menu=False
+        native_menu=True,
+        menu_description="✍️ Grammar & tone rewriter"
     ),
     CommandInfo(
         name="email",
         syntax="/email <topic>",
         description="Formal business & leave email drafter",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=False
+        native_menu=True,
+        menu_description="📧 Professional email drafter"
     ),
     CommandInfo(
         name="synonym",
@@ -1132,7 +1126,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Thesaurus, synonyms & antonyms",
         category="💰 Financial, Health & Lifestyle",
         aliases=["thesaurus"],
-        native_menu=False
+        native_menu=True,
+        menu_description="📖 Thesaurus & synonyms"
     ),
 
     # 🎮 Entertainment & Media
@@ -1142,28 +1137,32 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Generate HD QR code image",
         category="🎮 Entertainment & Media",
         aliases=["qrcode"],
-        native_menu=False
+        native_menu=True,
+        menu_description="📱 Generate HD QR code"
     ),
     CommandInfo(
         name="barcode",
         syntax="/barcode <number>",
         description="Generate Code128 barcode image",
         category="🎮 Entertainment & Media",
-        native_menu=False
+        native_menu=True,
+        menu_description="📊 Generate Barcode image"
     ),
     CommandInfo(
         name="meme",
         syntax="/meme <top> | <bottom>",
         description="Custom meme image generator",
         category="🎮 Entertainment & Media",
-        native_menu=False
+        native_menu=True,
+        menu_description="🎭 Custom meme generator"
     ),
     CommandInfo(
         name="anime",
         syntax="/anime <title>",
         description="MyAnimeList anime & manga ratings",
         category="🎮 Entertainment & Media",
-        native_menu=False
+        native_menu=True,
+        menu_description="🌸 Anime & manga ratings"
     ),
     CommandInfo(
         name="recipe",
@@ -1171,14 +1170,16 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Cooking ingredients & instructions",
         category="🎮 Entertainment & Media",
         aliases=["cook"],
-        native_menu=False
+        native_menu=True,
+        menu_description="🍳 Cooking recipes & guide"
     ),
     CommandInfo(
         name="riddle",
         syntax="/riddle",
         description="Fun brain teaser riddles",
         category="🎮 Entertainment & Media",
-        native_menu=False
+        native_menu=True,
+        menu_description="🧩 Brain teaser riddles"
     ),
     CommandInfo(
         name="pick",
@@ -1186,7 +1187,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Random decision maker, /dice, /coinflip",
         category="🎮 Entertainment & Media",
         aliases=["dice", "roll", "coinflip", "flip"],
-        native_menu=False
+        native_menu=True,
+        menu_description="🎲 Random decision /dice /coinflip"
     ),
     CommandInfo(
         name="youtube",
@@ -1194,7 +1196,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="YouTube video transcript & executive summary",
         category="🎮 Entertainment & Media",
         aliases=["yt"],
-        native_menu=False
+        native_menu=True,
+        menu_description="▶️ YouTube transcript & summary"
     ),
     CommandInfo(
         name="summarize",
@@ -1202,7 +1205,8 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Webpage / article instant markdown summary",
         category="🎮 Entertainment & Media",
         aliases=["article", "webpage"],
-        native_menu=False
+        native_menu=True,
+        menu_description="📄 Webpage & article summary"
     ),
     CommandInfo(
         name="briefing",
