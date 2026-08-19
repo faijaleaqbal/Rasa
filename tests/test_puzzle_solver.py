@@ -17,6 +17,7 @@ Covers:
 
 import os
 import unittest
+from unittest.mock import patch
 import tempfile
 from PIL import Image, ImageDraw, ImageFont
 
@@ -156,8 +157,10 @@ class TestPuzzleSolver(unittest.TestCase):
         self.assertIn("153", res.get("text", ""))
         self.assertIn("🔐", res.get("text", ""))
 
-    def test_text_only_solve_math_question(self):
+    @patch("actions.llm_provider.LLMProviderManager.call_chat_completion")
+    def test_text_only_solve_math_question(self, mock_llm):
         """Testing /solve with text math problem."""
+        mock_llm.return_value = ("The derivative of x^3 is 3x^2.", None, "MockProvider")
         res = commands.handle_slash_command("/solve What is the derivative of x^3?", self.user_id, self.chat_id)
         self.assertTrue(res.get("handled"))
         self.assertIn("3x", res.get("text", ""))
@@ -222,8 +225,10 @@ class TestPuzzleSolver(unittest.TestCase):
         res = superpack.solve_question_or_problem(image_path=img_path)
         self.assertIn("153", res)
 
-    def test_low_resolution_screenshot_solve(self):
+    @patch("actions.llm_provider.LLMProviderManager.call_vision_completion")
+    def test_low_resolution_screenshot_solve(self, mock_vis):
         """Testing low-resolution / compressed image."""
+        mock_vis.return_value = ("The lock code is 153.", "MockVision")
         img_path = self._create_puzzle_image([
             "079 - All numbers are incorrect",
             "165 - Two numbers are correct, but only one is in the correct position",
@@ -237,8 +242,12 @@ class TestPuzzleSolver(unittest.TestCase):
     # -----------------------------------------------------------------------
     # 6. Multiple Choice Image
     # -----------------------------------------------------------------------
-    def test_multiple_choice_image_solve(self):
+    @patch("actions.llm_provider.LLMProviderManager.call_chat_completion")
+    @patch("actions.llm_provider.LLMProviderManager.call_vision_completion")
+    def test_multiple_choice_image_solve(self, mock_vis, mock_llm):
         """Testing multiple-choice question image."""
+        mock_llm.return_value = ("The chemical symbol for Gold is Au (Option B).", None, "MockProvider")
+        mock_vis.return_value = ("The chemical symbol for Gold is Au (Option B).", "MockVision")
         img_path = self._create_mcq_image(
             question="What is the chemical symbol for Gold?",
             options=["A) Ag", "B) Au", "C) Fe", "D) Cu"],

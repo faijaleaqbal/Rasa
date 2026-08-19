@@ -354,7 +354,8 @@ def convert_receipt_to_excel(image_path_or_text: str, user_id: str = "default") 
             rows = parsed.get("rows", [["Sample Item", "1", "100", "100"]])
 
             # Generate Excel file
-            fpath = docs.create_excel_file(title, headers, rows, filename=f"invoice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            res_f = docs.create_excel_file(title, headers, rows, filename=f"invoice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            fpath = res_f[0] if isinstance(res_f, tuple) else res_f
             return {
                 "success": True,
                 "file_path": fpath,
@@ -365,7 +366,8 @@ def convert_receipt_to_excel(image_path_or_text: str, user_id: str = "default") 
         logger.error(f"Invoice to excel error: {e}")
 
     # Fallback
-    fpath = docs.create_excel_file("Receipt Summary", ["Description", "Amount"], [["Total", "N/A"]])
+    res_fallback = docs.create_excel_file("Receipt Summary", ["Description", "Amount"], [["Total", "N/A"]])
+    fpath = res_fallback[0] if isinstance(res_fallback, tuple) else res_fallback
     return {
         "success": True,
         "file_path": fpath,

@@ -647,3 +647,44 @@ def forget_user_fact(user_id: str, key: str) -> str:
     if db.delete_memory(user_id, key):
         return f"🗑️ I have forgotten `{key}`."
     return f"❌ Fact `{key}` was not found in memory."
+
+
+# ---------------------------------------------------------------------------
+# 37. Package & Courier Tracking
+# ---------------------------------------------------------------------------
+
+def track_package(tracking_number: str) -> str:
+    """
+    Provides tracking portal details and status links for postal/courier shipments (India Post, BlueDart, DTDC, Delhivery, FedEx, DHL, etc.).
+    """
+    clean_no = tracking_number.strip().upper()
+    if not clean_no:
+        return "⚠️ Please provide a tracking number (e.g. `/track EM123456789IN` or `/track 123456789`)."
+
+    # Identify courier pattern
+    courier = "India Post / Speed Post"
+    portal_url = "https://www.indiapost.gov.in/_layouts/15/dpt.cept.tracking/trackconsignment.aspx"
+    if clean_no.startswith(("1Z", "T")) or len(clean_no) == 18:
+        courier = "UPS"
+        portal_url = f"https://www.ups.com/track?tracknum={clean_no}"
+    elif len(clean_no) in (12, 15) and clean_no.isdigit():
+        courier = "FedEx"
+        portal_url = f"https://www.fedex.com/fedextrack/?trknbr={clean_no}"
+    elif clean_no.startswith("D") or len(clean_no) == 9:
+        courier = "Delhivery / DTDC"
+        portal_url = f"https://www.delhivery.com/track/package/{clean_no}"
+    elif re.match(r"^[A-Z]{2}\d{9}[A-Z]{2}$", clean_no):
+        courier = "India Post Speed Post (EMS)"
+        portal_url = "https://www.indiapost.gov.in/_layouts/15/dpt.cept.tracking/trackconsignment.aspx"
+
+    universal_url = f"https://www.17track.net/en/track?nums={clean_no}"
+
+    return (
+        f"📦 **Package & Shipment Tracker — `{clean_no}`**\n\n"
+        f"• **Identified Carrier:** {courier}\n"
+        f"• **Tracking Number:** `{clean_no}`\n"
+        f"• 🌐 **Official Carrier Portal:** [Track on {courier}]({portal_url})\n"
+        f"• 🛰️ **Universal Multi-Carrier Tracking:** [Track on 17TRACK]({universal_url})\n\n"
+        f"💡 _Tip: Click the link above to view real-time transit checkpoints, out-for-delivery status, and estimated arrival date._"
+    )
+

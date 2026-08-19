@@ -179,6 +179,23 @@ nlu:
     - Mumbai weather update
     - current temperature kya hai
     - kya aaj dhoop niklegi
+    - aj kya weather hai
+    - aaj ka weather batao
+    - aj mausam kaisa hai
+    - what's the weather
+    - Kolkata ka weather kaisa hai
+    - weather in Kolkata
+    - Delhi weather today
+    - Mumbai ka mausam
+    - aaj ka mausam kaisa hai
+    - abhi weather kaisa hai
+    - temperature kya hai
+    - aaj mausam kaisa rahega
+    - kal ka weather batao
+    - aj ka temperature kya hai
+    - mausam batao
+    - weather update do
+    - aaj ka weather kya hai
 
 - intent: ask_news
   examples: |

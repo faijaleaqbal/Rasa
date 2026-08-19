@@ -100,6 +100,132 @@ def search_the_web(query: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Weather Natural-Language City Extractor
+# ---------------------------------------------------------------------------
+
+# Weather filler / intent words in Hindi, Hinglish, and English that are NOT city names.
+# These are stripped from natural language queries to extract only the actual location.
+_WEATHER_FILLER_WORDS = {
+    # Hindi / Hinglish weather words
+    "aj", "aaj", "kal", "parso", "abhi", "abhi ka",
+    "ka", "ki", "ke", "kya", "hai", "hain", "ho", "kaisa", "kaisi", "kaise",
+    "mausam", "mausham", "mosam", "maosam",
+    "weather", "forecast", "temperature", "temp", "taapmaan", "tapman",
+    "batao", "bata", "btao", "bto", "dikhao", "dikha", "sunao", "suna",
+    "batade", "bata de", "sunado", "suna do",
+    "update", "report", "status", "info", "information",
+    "hoga", "hogi", "hogi kya", "rahega", "rahegi", "rehga", "rehgi",
+    "aaj ka", "aj ka", "kal ka", "aaj ki", "aj ki",
+    "today", "tomorrow", "current", "now", "right now", "live",
+    "please", "pls", "plz", "bhai", "bro", "dost", "yaar",
+    "what", "whats", "what's", "how", "how's", "hows",
+    "is", "the", "in", "for", "me", "my", "tell",
+    "give", "get", "show", "check", "do",
+    "barish", "baarish", "dhoop", "garmi", "sardi", "thand", "thandi",
+    "hawa", "humidity", "wind",
+    "kitna", "kitni", "kab", "kaha", "kahan",
+}
+
+# Precompiled regex for slash command stripping
+_SLASH_WEATHER_RE = re.compile(r"^/weather\b\s*", re.IGNORECASE)
+
+# Precompiled regex for prepositions and connectors before city name
+_PREP_RE = re.compile(
+    r"\b(?:in|of|for|at|ka|ki|ke|me|mein|mai|main|mei|ka weather|ki weather|ke weather)\s+",
+    re.IGNORECASE,
+)
+
+
+def extract_city_from_weather_query(text: str) -> Optional[str]:
+    """
+    Extracts the actual city/location name from a natural-language weather query.
+
+    Handles:
+      - Slash commands: "/weather Delhi" → "Delhi"
+      - English: "What's the weather in Kolkata?" → "Kolkata"
+      - Hindi/Hinglish: "Aj kya weather hai" → None (default)
+      - Hindi with city: "Kolkata ka weather kaisa hai?" → "Kolkata"
+      - Hindi location: "Mumbai ka mausam" → "Mumbai"
+      - "Delhi weather today" → "Delhi"
+
+    Returns the extracted city name, or None (which signals get_weather_data to use default).
+    """
+    if not text or not text.strip():
+        return None
+
+    raw = text.strip()
+
+    # 1. Handle slash command: "/weather <city>"
+    if raw.startswith("/"):
+        city = _SLASH_WEATHER_RE.sub("", raw).strip()
+        return city if city else None
+
+    # 2. Try structured pattern: "<City> ka/ki/ke weather/mausam"
+    #    e.g., "Kolkata ka weather kaisa hai?" → "Kolkata"
+    #    e.g., "Mumbai ka mausam" → "Mumbai"
+    pattern_city_before = re.match(
+        r"^(.+?)\s+(?:ka|ki|ke)\s+(?:weather|mausam|mausham|mosam|maosam|temperature|temp|forecast)\b",
+        raw,
+        re.IGNORECASE,
+    )
+    if pattern_city_before:
+        candidate = pattern_city_before.group(1).strip()
+        # Verify it's not just filler ("aaj ka weather" → candidate="aaj" → filler)
+        candidate_lower_words = set(candidate.lower().split())
+        if not candidate_lower_words.issubset(_WEATHER_FILLER_WORDS):
+            # Strip any leading filler from the candidate
+            clean_parts = [w for w in candidate.split() if w.lower() not in _WEATHER_FILLER_WORDS]
+            if clean_parts:
+                return " ".join(clean_parts)
+
+    # 3. Try structured pattern: "weather/mausam in/of <City>"
+    #    e.g., "Weather in Kolkata" → "Kolkata"
+    #    e.g., "What's the weather in New Delhi?" → "New Delhi"
+    pattern_city_after = re.search(
+        r"(?:weather|mausam|mausham|mosam|maosam|temperature|temp|forecast)\s+"
+        r"(?:in|of|for|at|me|mein|mai|main|mei)\s+(.+?)[\?\.\!]*$",
+        raw,
+        re.IGNORECASE,
+    )
+    if pattern_city_after:
+        candidate = pattern_city_after.group(1).strip()
+        clean_parts = [w for w in candidate.split() if w.lower() not in _WEATHER_FILLER_WORDS]
+        if clean_parts:
+            return " ".join(clean_parts)
+
+    # 4. Try pattern: "<City> weather [today]"
+    #    e.g., "Delhi weather today" → "Delhi"
+    pattern_city_weather = re.match(
+        r"^(.+?)\s+(?:weather|mausam|mausham|mosam|maosam|temperature|temp|forecast)\b",
+        raw,
+        re.IGNORECASE,
+    )
+    if pattern_city_weather:
+        candidate = pattern_city_weather.group(1).strip()
+        candidate_lower_words = set(candidate.lower().split())
+        if not candidate_lower_words.issubset(_WEATHER_FILLER_WORDS):
+            clean_parts = [w for w in candidate.split() if w.lower() not in _WEATHER_FILLER_WORDS]
+            if clean_parts:
+                return " ".join(clean_parts)
+
+    # 5. No explicit city found → strip ALL known filler words and see if anything remains
+    words = re.sub(r"[?\.\!,;:]+", "", raw).split()
+    remaining = [w for w in words if w.lower() not in _WEATHER_FILLER_WORDS]
+    # If remaining words look like a city (1-4 words, capitalized or proper noun)
+    if remaining and len(remaining) <= 4:
+        candidate = " ".join(remaining)
+        # Sanity check: a city shouldn't be common Hindi sentence fragments
+        skip_fragments = {"raha", "rahi", "rahe", "laga", "lagi", "lag", "niklegi",
+                          "hogi", "hoga", "rahega", "rahegi", "acha", "achchha",
+                          "accha", "theek", "thik", "kaisa", "kaisi"}
+        if not set(w.lower() for w in remaining).issubset(skip_fragments):
+            return candidate
+
+    # 6. No city identified → return None (default city will be used)
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Comprehensive Tool Calling Dispatcher for Groq LLM
 # ---------------------------------------------------------------------------
 
@@ -120,11 +246,11 @@ LLM_TOOLS_SPEC = [
         "type": "function",
         "function": {
             "name": "get_weather",
-            "description": "Get real-time weather, temperature, humidity, and wind conditions for any city.",
+            "description": "Get real-time weather, temperature, humidity, and wind conditions for any city. If the user does not mention a specific city, pass 'Malda, West Bengal, India' as the default. NEVER pass the user's full sentence as the city name — extract only the actual city/location.",
             "parameters": {
                 "type": "object",
-                "properties": {"city": {"type": "string", "description": "City or location name"}},
-                "required": ["city"]
+                "properties": {"city": {"type": "string", "description": "Actual city or location name only (e.g. 'Delhi', 'Mumbai', 'Kolkata'). Default: 'Malda, West Bengal, India'"}},
+                "required": []
             }
         }
     },
@@ -1759,9 +1885,7 @@ class ActionGetWeather(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         user_text = tracker.latest_message.get("text", "")
-        # Strip slash command if present and extract requested city or fallback to default
-        clean_text = user_text.replace("/weather", "").strip()
-        city = clean_text if clean_text else "Malda, West Bengal, India"
+        city = extract_city_from_weather_query(user_text)
         res = apis.get_weather_data(city)
         dispatcher.utter_message(text=res)
         return []

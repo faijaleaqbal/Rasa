@@ -56,9 +56,18 @@ def is_typing_enabled() -> bool:
 
 def is_reaction_enabled() -> bool:
     """Checks if context-aware message reactions are enabled in configuration."""
-    # Check new config first, fall back to legacy variable
-    val = os.getenv("TELEGRAM_CONTEXT_REACTIONS_ENABLED") or os.getenv("TELEGRAM_REACTIONS_ENABLED") or os.getenv("TELEGRAM_RANDOM_REACTION_ENABLED", "true")
-    return val.strip().lower() in ("true", "1", "yes", "on")
+    # If any reaction env var is explicitly set to false/disabled, disable reactions
+    for key in ("TELEGRAM_CONTEXT_REACTIONS_ENABLED", "TELEGRAM_REACTIONS_ENABLED", "TELEGRAM_RANDOM_REACTION_ENABLED"):
+        val = os.getenv(key)
+        if val is not None and val.strip().lower() in ("false", "0", "no", "off"):
+            return False
+
+    for key in ("TELEGRAM_CONTEXT_REACTIONS_ENABLED", "TELEGRAM_REACTIONS_ENABLED", "TELEGRAM_RANDOM_REACTION_ENABLED"):
+        val = os.getenv(key)
+        if val is not None and val.strip().lower() in ("true", "1", "yes", "on"):
+            return True
+
+    return True
 
 
 def get_reaction_emojis() -> List[str]:

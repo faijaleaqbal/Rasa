@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from PIL import Image
 
 from actions import skills_super_pack as superpack
@@ -68,7 +69,9 @@ class TestSuperPackSkills(unittest.TestCase):
         self.assertIn("Ping", res)
         self.assertIn("Resolved", res)
 
-    def test_slash_command_dispatch(self):
+    @patch("actions.llm_provider.LLMProviderManager.call_chat_completion")
+    def test_slash_command_dispatch(self, mock_llm):
+        mock_llm.return_value = ("The derivative of x^2 is 2x.", None, "MockProvider")
         res_aqi = handle_slash_command("/aqi Kolkata", "user_1", "chat_1")
         self.assertTrue(res_aqi["handled"])
         self.assertIn("Air Quality", res_aqi["text"])
