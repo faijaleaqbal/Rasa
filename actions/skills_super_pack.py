@@ -713,57 +713,23 @@ def compare_items_ai(comparison_query: str) -> str:
 # ---------------------------------------------------------------------------
 # 12. 🎓 AI Visual & Text Problem / Question Solver (Any Question / Photo)
 # ---------------------------------------------------------------------------
-def solve_question_or_problem(query_or_file_path: str) -> str:
+def solve_question_or_problem(
+    query_or_file_path: str = "",
+    image_path: Optional[str] = None,
+    caption: Optional[str] = None
+) -> str:
     """
     Universal AI Problem Solver:
-    - Accepts text question OR photo/receipt/exam paper.
-    - If photo/image: runs OCR to extract formulas, questions, and text.
-    - Solves with step-by-step reasoning, mathematical proof, and final answer.
+    - Accepts text question, photo/image file, or image URL + optional caption.
+    - If code puzzle: extracts clues and runs deterministic constraint solver.
+    - If math/exam/science/MCQ question: runs multi-pass OCR and multimodal Vision reasoning.
+    - Returns structured answer with final answer first, contextual emoji, and step-by-step verification.
     """
-    clean_input = query_or_file_path.strip()
-    if not clean_input:
-        return "Usage: `/solve <your question or photo URL>` (e.g. `/solve Find derivative of x^2 * sin(x)` or send a photo of your question!)"
+    from . import puzzle_solver
+    return puzzle_solver.solve_image_or_text_problem(
+        query_text=query_or_file_path,
+        image_path=image_path,
+        caption=caption
+    )
 
-    question_text = clean_input
-    is_image = clean_input.startswith(("http://", "https://")) or os.path.exists(clean_input) or clean_input.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
-
-    if is_image:
-        try:
-            from .skills_advanced import extract_ocr_text
-            ocr_res = extract_ocr_text(clean_input)
-            if ocr_res and "Image text extraction failed" not in ocr_res and len(ocr_res.strip()) > 5:
-                question_text = ocr_res.strip()
-            else:
-                return "⚠️ Could not clearly read the text in this photo. Please make sure the question is well-lit and in focus."
-        except Exception as ex:
-            logger.warning(f"OCR extraction failed before solving: {ex}")
-
-    try:
-        from .llm_provider import LLMProviderManager
-        system_prompt = (
-            "You are Alya's Master Problem Solving AI — an elite multi-discipline tutor and academic genius. "
-            "You can solve ANY question across Mathematics (Calculus, Algebra, Geometry, Probability), "
-            "Physics, Chemistry, Biology, Computer Science/Coding, Economics, History, Reasoning, General Knowledge, and MCQs.\n\n"
-            "Formatting Rules:\n"
-            "1. 🎯 **Question Identified**: Restate the core problem clearly.\n"
-            "2. 💡 **Step-by-Step Solution**: Show full logical steps, formulas, and derivations.\n"
-            "3. 📌 **Final Answer**: Clearly highlight the final result or correct MCQ option.\n"
-            "4. 🧠 **Key Concept / Tip**: Brief 1-line concept explanation for quick understanding.\n"
-            "Tone: Clear, encouraging, structured, using LaTeX/Unicode math symbols where helpful."
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Please solve this question thoroughly:\n\n{question_text}"}
-        ]
-
-        solution, _, _ = LLMProviderManager.call_chat_completion(
-            messages=messages,
-            temperature=0.4,
-            max_tokens=950
-        )
-        return solution or "⚠️ Could not solve this question. Please check the wording and try again."
-    except Exception as e:
-        logger.error(f"Error solving problem: {e}")
-        return f"❌ Problem Solving Error: {str(e)}"
 

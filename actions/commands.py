@@ -1159,10 +1159,42 @@ def handle_slash_command(
 
     # 135. /solve <question_or_photo> (Universal AI Question & Exam Problem Solver)
     elif cmd in ["/solve", "/ask", "/answer", "/mathsolve", "/homework", "/doubt"]:
-        target_item = args_str or attachment_path or get_last_user_media(user_id)
-        if not target_item:
-            return {"handled": True, "text": "🎓 **Universal AI Problem Solver Usage:**\n• `/solve <question text>`\n• `/solve <image_url_or_file>`\n_Or send a photo of any math, physics, coding or exam question directly in chat!_"}
-        return {"handled": True, "text": superpack.solve_question_or_problem(target_item)}
+        resolved_img: Optional[str] = None
+        resolved_text = args_str.strip() if args_str else ""
+
+        # 1. Direct attachment provided in request
+        if attachment_path and os.path.exists(attachment_path):
+            resolved_img = attachment_path
+
+        # 2. Check if args_str starts with an image file path or URL
+        if not resolved_img and resolved_text:
+            parts = resolved_text.split(maxsplit=1)
+            first_tok = parts[0].strip()
+            if first_tok.startswith(("http://", "https://")) or os.path.exists(first_tok) or first_tok.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                resolved_img = first_tok
+                resolved_text = parts[1].strip() if len(parts) > 1 else ""
+
+        # 3. Check cached user media (for recent photo uploads)
+        if not resolved_img and user_id:
+            cached = get_last_user_media(user_id)
+            if cached and os.path.exists(cached):
+                resolved_img = cached
+
+        if not resolved_img and not resolved_text:
+            return {
+                "handled": True,
+                "text": "🎓 **Universal AI Problem Solver Usage:**\n• `/solve <question text>`\n• `/solve <image_url_or_file>`\n_Or send a photo of any math, physics, coding or exam question directly in chat!_"
+            }
+
+        return {
+            "handled": True,
+            "text": superpack.solve_question_or_problem(
+                query_or_file_path=resolved_text or resolved_img or "",
+                image_path=resolved_img,
+                caption=resolved_text
+            )
+        }
+
 
     # Fallback for unrecognized slash commands
     clean_cmd_name = cmd.lstrip("/")

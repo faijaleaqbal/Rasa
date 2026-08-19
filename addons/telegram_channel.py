@@ -512,11 +512,15 @@ class SmartTelegramInput(TelegramInput):
                             caption_text = (msg.caption or "").strip()
 
                             if saved_img:
-                                from actions import skills_content as content_skills
-                                vision_analysis = content_skills.analyze_image_vision(saved_img, caption_text)
-                                text = f"User uploaded a photo. Visual Analysis:\n{vision_analysis}\nCaption: {caption_text}".strip()
+                                if caption_text.startswith("/"):
+                                    text = f"User uploaded a photo with command: {caption_text}"
+                                else:
+                                    from actions import skills_content as content_skills
+                                    vision_analysis = content_skills.analyze_image_vision(saved_img, caption_text)
+                                    text = f"User uploaded a photo. Visual Analysis:\n{vision_analysis}\nCaption: {caption_text}".strip()
                             else:
                                 text = f"User uploaded a photo. Caption: {caption_text or 'Please see the attached photo.'}"
+
 
                         elif self._is_user_message(msg):
                             text = (msg.text or "").replace("/bot", "")
