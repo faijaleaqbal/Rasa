@@ -96,17 +96,22 @@ class TestTelegramUXFeatures(unittest.IsolatedAsyncioTestCase):
             # Guaranteed cleanup after timeout cancellation
             self.assertIsNone(scope._task)
 
-    async def test_random_emoji_is_selected_from_pool(self):
+    async def test_context_aware_emoji_is_selected(self):
         with patch("aiohttp.ClientSession.post") as mock_post:
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_post.return_value.__aenter__.return_value = mock_response
 
-            emoji_pool = get_reaction_emojis()
-            chosen = await async_set_message_reaction(chat_id="12345", message_id=101)
+            # Context-aware reaction for greeting "Hi buddy"
+            chosen = await async_set_message_reaction(chat_id="12345", message_id=101, text="Hi buddy")
 
             self.assertIsNotNone(chosen)
-            self.assertIn(chosen, emoji_pool)
+            self.assertEqual(chosen, "👋")
+
+    async def test_no_random_emoji_when_empty_message(self):
+        # Empty text / no emoji should NEVER randomly select an emoji
+        chosen = await async_set_message_reaction(chat_id="12345", message_id=102, text="")
+        self.assertIsNone(chosen)
 
     async def test_exactly_one_reaction_per_user_message(self):
         with patch("aiohttp.ClientSession.post") as mock_post:

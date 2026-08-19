@@ -553,14 +553,17 @@ class SmartTelegramInput(TelegramInput):
                     )
                     return response.text("success")
 
-                # 3.2 Trigger Random Emoji Reaction to Incoming Message
+                # 3.2 Trigger Context-Aware Emoji Reaction to Incoming Message
                 from addons.telegram_ux import async_set_message_reaction, TelegramTypingScope
+                from addons.emoji_reaction_manager import get_emoji_reaction_manager
                 msg_id = getattr(msg, "message_id", None)
                 if msg_id and sender_id and not getattr(getattr(msg, "from_user", None), "is_bot", False):
                     try:
                         await async_set_message_reaction(
                             chat_id=sender_id,
                             message_id=msg_id,
+                            text=text,
+                            user_id=user_id,
                             bot_token=self.access_token,
                             session=out_channel.session,
                         )

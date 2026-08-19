@@ -1,11 +1,10 @@
 """
 Production-hardened Telegram UX helpers for Alya:
 1. Dynamic Typing Indicator with background refresh and guaranteed cleanup.
-2. Random Emoji Reactions on incoming user messages.
+2. Context-Aware Deterministic Emoji Reactions on incoming user messages.
 """
 
 import os
-import random
 import logging
 import asyncio
 import threading
@@ -14,6 +13,13 @@ from typing import Optional, List, Union, Set, Tuple
 import aiohttp
 import requests
 
+from addons.emoji_reaction_manager import (
+    get_emoji_reaction_manager,
+    CATEGORY_EMOJIS,
+    CATEGORY_TELEGRAM_FALLBACKS,
+    EmojiCategory,
+)
+
 logger = logging.getLogger(__name__)
 
 # Verified Telegram Bot API standard reaction emojis (Telegram Bot API 7.0+)
@@ -21,7 +27,9 @@ DEFAULT_REACTION_EMOJIS = [
     "👍", "❤️", "🔥", "👎", "😎", "🎉", "😁", "😢", "😡", "🤔",
     "👏", "💯", "🥰", "🤩", "🙏", "👌", "🤣", "🤯", "😱", "⚡",
     "🏆", "💔", "🤨", "😐", "🤓", "👻", "🤝", "🫡", "🆒", "💘",
-    "😘", "👾", "🤷"
+    "😘", "👾", "🤷", "👋", "😊", "🌅", "😄", "💕", "😔", "🫂",
+    "💙", "😤", "😠", "🤦", "😕", "❓", "😳", "😮", "😆", "😂",
+    "✅", "❌", "💡", "🙂"
 ]
 
 VALID_TELEGRAM_REACTIONS = set(DEFAULT_REACTION_EMOJIS) | {
@@ -29,7 +37,7 @@ VALID_TELEGRAM_REACTIONS = set(DEFAULT_REACTION_EMOJIS) | {
     "🌭", "🍌", "🍓", "🍾", "💋", "🖕", "😈", "😴", "😭", "👨‍💻",
     "👀", "🎃", "🙈", "😇", "😨", "✍", "🎅", "🎄", "☃", "💅",
     "🤪", "🗿", "🙉", "🦄", "💊", "🙊", "🤷‍♂️", "🤷‍♀️", "⚡️", "✍️",
-    "☃️", "🕊️"
+    "☃️", "🕊️", "🤗", "🤬"
 }
 
 # Guaranteed fallback emojis if a custom/primary emoji fails
@@ -47,8 +55,10 @@ def is_typing_enabled() -> bool:
 
 
 def is_reaction_enabled() -> bool:
-    """Checks if random message reactions are enabled in configuration."""
-    return os.getenv("TELEGRAM_RANDOM_REACTION_ENABLED", "true").strip().lower() in ("true", "1", "yes", "on")
+    """Checks if context-aware message reactions are enabled in configuration."""
+    # Check new config first, fall back to legacy variable
+    val = os.getenv("TELEGRAM_CONTEXT_REACTIONS_ENABLED") or os.getenv("TELEGRAM_REACTIONS_ENABLED") or os.getenv("TELEGRAM_RANDOM_REACTION_ENABLED", "true")
+    return val.strip().lower() in ("true", "1", "yes", "on")
 
 
 def get_reaction_emojis() -> List[str]:
@@ -76,7 +86,6 @@ def validate_reaction_pool() -> int:
     pool = get_reaction_emojis()
     logger.info(f"Telegram reaction pool validated with {len(pool)} supported standard emojis.")
     return len(pool)
-
 
 
 def get_typing_interval() -> float:
@@ -140,19 +149,34 @@ async def async_set_message_reaction(
     chat_id: Union[str, int],
     message_id: Union[str, int],
     emoji: Optional[str] = None,
+    text: Optional[str] = None,
     bot_token: Optional[str] = None,
     session: Optional[aiohttp.ClientSession] = None,
+    user_id: Optional[Union[str, int]] = None,
 ) -> Optional[str]:
     """
-    Sets a random emoji reaction to a specific user message using Telegram Bot API setMessageReaction.
+    Sets a context-aware emoji reaction to a specific user message using Telegram Bot API setMessageReaction.
     Attaches reaction directly to user's message.
-    Returns the emoji used, or None if failed or disabled.
+    Returns the emoji used, or None if failed, disabled, or skipped.
     """
     if not is_reaction_enabled():
         return None
 
     token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
     if not token or not chat_id or not message_id:
+        return None
+
+    # Determine emoji reaction via EmojiReactionManager if not explicitly specified
+    manager = get_emoji_reaction_manager()
+    if emoji:
+        chosen_emoji = emoji
+    elif text is not None:
+        chosen_emoji = manager.get_reaction(text=text, user_id=str(user_id or chat_id))
+    else:
+        # Fallback for bare API calls with neither emoji nor text specified
+        chosen_emoji = "👍"
+
+    if not chosen_emoji:
         return None
 
     # Deduplicate: react only once per message ID
@@ -165,7 +189,6 @@ async def async_set_message_reaction(
             _REACTED_MESSAGES.clear()
         _REACTED_MESSAGES.add(cache_key)
 
-    chosen_emoji = emoji if (emoji and emoji in VALID_TELEGRAM_REACTIONS) else random.choice(get_reaction_emojis())
     url = f"https://api.telegram.org/bot{token}/setMessageReaction"
 
     async def _post_reaction(target_emoji: str) -> Tuple[bool, int, str]:
@@ -192,15 +215,16 @@ async def async_set_message_reaction(
             return chosen_emoji
         else:
             logger.warning(f"Telegram reaction '{chosen_emoji}' failed for message {message_id} in chat {chat_id}: HTTP {status_code} - {resp_text}")
-            # If rejected due to invalid reaction, retry with guaranteed fallback
+            # If rejected due to invalid reaction, retry with category-aligned fallback
             if "REACTION_INVALID" in resp_text or "REACTION_EMOJI_INVALID" in resp_text:
-                for fb_emoji in FALLBACK_REACTION_EMOJIS:
-                    if fb_emoji != chosen_emoji:
-                        fb_ok, fb_status, fb_text = await _post_reaction(fb_emoji)
-                        if fb_ok:
-                            logger.info(f"Successfully applied fallback Telegram reaction '{fb_emoji}' to message {message_id} in chat {chat_id}")
-                            return fb_emoji
-                        logger.warning(f"Telegram reaction fallback '{fb_emoji}' failed: HTTP {fb_status} - {fb_text}")
+                cat_fallback = manager.get_fallback_emoji(chosen_emoji)
+                candidates = [cat_fallback] + [fb for fb in FALLBACK_REACTION_EMOJIS if fb != chosen_emoji and fb != cat_fallback]
+                for fb_emoji in candidates:
+                    fb_ok, fb_status, fb_text = await _post_reaction(fb_emoji)
+                    if fb_ok:
+                        logger.info(f"Successfully applied fallback Telegram reaction '{fb_emoji}' to message {message_id} in chat {chat_id}")
+                        return fb_emoji
+                    logger.warning(f"Telegram reaction fallback '{fb_emoji}' failed: HTTP {fb_status} - {fb_text}")
             return None
     except Exception as e:
         logger.warning(f"Telegram reaction error for message {message_id} in chat {chat_id}: {e}")
@@ -211,14 +235,27 @@ def sync_set_message_reaction(
     chat_id: Union[str, int],
     message_id: Union[str, int],
     emoji: Optional[str] = None,
+    text: Optional[str] = None,
     bot_token: Optional[str] = None,
+    user_id: Optional[Union[str, int]] = None,
 ) -> Optional[str]:
-    """Synchronous version of setMessageReaction with fallback and error reporting."""
+    """Synchronous version of setMessageReaction with context awareness and fallback."""
     if not is_reaction_enabled():
         return None
 
     token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
     if not token or not chat_id or not message_id:
+        return None
+
+    manager = get_emoji_reaction_manager()
+    if emoji:
+        chosen_emoji = emoji
+    elif text is not None:
+        chosen_emoji = manager.get_reaction(text=text, user_id=str(user_id or chat_id))
+    else:
+        chosen_emoji = "👍"
+
+    if not chosen_emoji:
         return None
 
     cache_key = f"{chat_id}:{message_id}"
@@ -229,7 +266,6 @@ def sync_set_message_reaction(
             _REACTED_MESSAGES.clear()
         _REACTED_MESSAGES.add(cache_key)
 
-    chosen_emoji = emoji if (emoji and emoji in VALID_TELEGRAM_REACTIONS) else random.choice(get_reaction_emojis())
     url = f"https://api.telegram.org/bot{token}/setMessageReaction"
 
     def _post_reaction_sync(target_emoji: str) -> Tuple[bool, int, str]:
@@ -250,12 +286,13 @@ def sync_set_message_reaction(
         else:
             logger.warning(f"Telegram reaction '{chosen_emoji}' failed for message {message_id} in chat {chat_id}: HTTP {status_code} - {resp_text}")
             if "REACTION_INVALID" in resp_text or "REACTION_EMOJI_INVALID" in resp_text:
-                for fb_emoji in FALLBACK_REACTION_EMOJIS:
-                    if fb_emoji != chosen_emoji:
-                        fb_ok, fb_status, fb_text = _post_reaction_sync(fb_emoji)
-                        if fb_ok:
-                            logger.info(f"Successfully applied fallback Telegram reaction '{fb_emoji}' to message {message_id} in chat {chat_id}")
-                            return fb_emoji
+                cat_fallback = manager.get_fallback_emoji(chosen_emoji)
+                candidates = [cat_fallback] + [fb for fb in FALLBACK_REACTION_EMOJIS if fb != chosen_emoji and fb != cat_fallback]
+                for fb_emoji in candidates:
+                    fb_ok, fb_status, fb_text = _post_reaction_sync(fb_emoji)
+                    if fb_ok:
+                        logger.info(f"Successfully applied fallback Telegram reaction '{fb_emoji}' to message {message_id} in chat {chat_id}")
+                        return fb_emoji
             return None
     except Exception as e:
         logger.warning(f"Telegram reaction error for message {message_id} in chat {chat_id}: {e}")
