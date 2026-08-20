@@ -14,15 +14,48 @@ logger = logging.getLogger(__name__)
 # User-facing fail-safe message when all free LLM providers/routes fail
 ALL_PROVIDERS_FAILED_MSG = "«Free AI service is temporarily unavailable. Please try again shortly.»"
 
+# Token budget constants for chat vs. structured generation
+CHAT_MAX_TOKENS = 120
+SYNTHESIS_CONCISE_MAX_TOKENS = 160
+STRUCTURED_MAX_TOKENS = 900
+
+# Tools that produce rich/structured multi-point output (PDFs, code, search, docs)
+STRUCTURED_OUTPUT_TOOLS = {
+    "search_live_web",
+    "query_sqlite_database",
+    "run_python_code_sandbox",
+    "inspect_domain_whois",
+    "inspect_ssl_cert",
+    "view_server_logs",
+    "extract_ocr_text",
+    "transcribe_audio",
+    "generate_resume_pdf",
+    "generate_cover_letter_pdf",
+    "get_full_skills_directory",
+    "solve_problem_or_puzzle",
+    "summarize_long_content",
+    "get_recipe_steps",
+    "compare_items_ai",
+    "explain_medical_interaction",
+    "lookup_medicine_info",
+}
+
 
 def clean_llm_output(text: Optional[str]) -> str:
-    """Strips <think> tags and reasoning blocks from model output."""
+    """Strips <think> tags, reasoning blocks, and unwanted internal monologue from model output."""
     if not text:
         return ""
     if "</think>" in text:
         text = text.split("</think>")[-1].strip()
     elif "<think>" in text:
         text = re.sub(r"<think>.*", "", text, flags=re.DOTALL).strip()
+    if "</thought>" in text:
+        text = text.split("</thought>")[-1].strip()
+    elif "<thought>" in text:
+        text = re.sub(r"<thought>.*", "", text, flags=re.DOTALL).strip()
+
+    # Strip markdown thought codeblocks
+    text = re.sub(r"```(?:thought|thinking)[\s\S]*?```", "", text, flags=re.IGNORECASE).strip()
     return text.strip()
 
 

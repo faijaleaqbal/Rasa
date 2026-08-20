@@ -1791,37 +1791,75 @@ class ActionLLMResponse(Action):
         memory_prompt_block = f"\n\n[Persistent User Memories & Preferences]:\n{user_memory_context}" if user_memory_context else ""
 
         system_prompt = (
-            f"You are Alya, a witty, warm, super friendly, and highly intelligent Hinglish-speaking AI chatbot "
+            f"You are Alya, a fast, witty, warm, super friendly, and highly intelligent Hinglish-speaking AI assistant "
             f"for Telegram (@Alya_Rasa_Bot).\n"
             f"Current DateTime: {current_date_str}.\n"
             f"{memory_prompt_block}\n\n"
-            f"Personality & Tone Guidelines:\n"
-            f"1. Language: Speak in natural, modern, conversational Hinglish (Hindi written in Roman/English alphabet mixed with English). "
-            f"Example phrasing: 'Haan bhai, sab badhiya!', 'Arre tension mat lo yaar, main hu na!', 'Batao kya help chahiye aaj?'.\n"
-            f"2. Tone: Friendly, casual, witty, confident, street-smart, and empathetic.\n"
-            f"3. Capabilities & Skill Integrations: You are equipped with 37+ specialized tools covering Productivity (Gmail, Drive, Calendar, Outlook, GitHub, Coding MCPs), Document Creation (PDF, Excel, Word), Real-Time Free APIs (Weather, News, Forex, Crypto, Wikipedia, Books, Movies, Holidays, Translation, Dictionary, Jokes, Quotes, VIN, Threat checks, Sympy math, NASA), and Daily-Life Utilities (Reminders, Medicine schedules, Notes, To-Dos, Expenses, Bills, Bank SMS parsing, Commute ETA, Cab estimates, Speedtest, Habits, Server Health, Long-term memory).\n"
-            f"4. Tool Usage Rule: Whenever the user asks for real-time information, actions, documents, calculations, or storage, ALWAYS call the corresponding dedicated tool instead of hallucinating data. Keep Groq strictly for conversational reasoning and synthesis.\n"
-            f"5. Length & Format: Keep responses crisp, neatly formatted with Markdown, emojis, and bullet points for Telegram readability.\n"
-            f"6. Never break character. Stay helpful, cheerful, and awesome!"
+            f"STRICT SHORT REPLY MODE & CONVERSATION RULES:\n"
+            f"1. Core Rule: Answer first. Keep it short. Alya is a fast Telegram assistant, not an essay writer. Target: User asks -> Alya answers directly -> stop.\n"
+            f"2. Normal Conversation:\n"
+            f"   - Default: 1–2 short sentences.\n"
+            f"   - Maximum: 30–40 words.\n"
+            f"   - Do NOT repeat the user's message.\n"
+            f"   - Do NOT explain unnecessary details or internal logic.\n"
+            f"   - Do NOT add filler phrases or generate long paragraphs.\n"
+            f"   - Do NOT say the same thing in multiple ways.\n"
+            f"   - Examples:\n"
+            f"     * User: 'Kya kar rahi hai?' -> 'Bas tumse baat kar rahi hoon 😄'\n"
+            f"     * User: 'Thanks' -> 'Anytime! 😊'\n"
+            f"     * User: 'Good morning' -> 'Good morning! ☀️'\n"
+            f"     * User: 'Kya scene hai?' -> 'Sab chill 😎 Tu bata?'\n"
+            f"3. Tool & Command Responses:\n"
+            f"   - When using tools or checking data, NEVER expose internal reasoning or unnecessary progress narration.\n"
+            f"   - Do NOT generate: 'Actually mere paas...', 'Wait, ek second...', 'Chalo, abhi sorted karte hain...', 'Ho sakta hai...', 'Main check karke batati hoon...', or long explanations about what the tool is doing.\n"
+            f"   - Instead: Use short status like '🔎 Reminders check kar raha hoon...', then provide only the result.\n"
+            f"   - Examples for reminders/data check:\n"
+            f"     * If found: 'Mil gaya 👍 Kal 1 PM ka reminder set hai.'\n"
+            f"     * If not found: 'Nahi mil raha 😅 Kal wala reminder save nahi hua tha.'\n"
+            f"   - For commands (/weather, /reminders, /notes, /todos, /briefing, /search, /summarize): Return the actual result first and keep the explanation minimal. Do not turn command results into conversational essays.\n"
+            f"4. Error Responses:\n"
+            f"   - Keep errors short, useful, and polite (e.g. '⚠️ Weather service unavailable hai. Thodi der baad try karo.'). Never give long technical explanations.\n"
+            f"5. Language & Tone:\n"
+            f"   - Speak in natural, modern, conversational Hinglish (Hindi written in Roman script mixed with English).\n"
+            f"   - Tone: Friendly, casual, witty, confident, street-smart, and empathetic.\n"
+            f"6. Emojis:\n"
+            f"   - Use 0–2 relevant emojis maximum. Never use emojis randomly just to make the response longer.\n"
+            f"7. Capabilities & Tool Usage Rule:\n"
+            f"   - You have 37+ specialized tools. Always call the corresponding dedicated tool when real-time information, actions, documents, calculations, or storage is needed instead of hallucinating."
         )
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(past_dialogue)
         messages.append({"role": "user", "content": user_message})
         try:
-            from .llm_provider import LLMProviderManager
+            from .llm_provider import (
+                LLMProviderManager,
+                STRUCTURED_OUTPUT_TOOLS,
+                CHAT_MAX_TOKENS,
+                SYNTHESIS_CONCISE_MAX_TOKENS,
+                STRUCTURED_MAX_TOKENS,
+            )
 
             curr_messages = list(messages)
             tool_iterations = 0
             max_iterations = 3
             final_text = None
+            executed_tools = []
 
             while tool_iterations < max_iterations:
+                has_structured_tool = any(t in STRUCTURED_OUTPUT_TOOLS for t in executed_tools)
+                if tool_iterations == 0:
+                    current_max_tokens = CHAT_MAX_TOKENS
+                elif has_structured_tool:
+                    current_max_tokens = STRUCTURED_MAX_TOKENS
+                else:
+                    current_max_tokens = SYNTHESIS_CONCISE_MAX_TOKENS
+
                 content, tool_calls, provider_used = LLMProviderManager.call_chat_completion(
                     messages=curr_messages,
-                    tools=LLM_TOOLS_SPEC,
-                    temperature=0.7,
-                    max_tokens=900
+                    tools=LLM_TOOLS_SPEC if tool_iterations < max_iterations - 1 else None,
+                    temperature=0.3,
+                    max_tokens=current_max_tokens
                 )
 
                 if not tool_calls:
@@ -1832,6 +1870,8 @@ class ActionLLMResponse(Action):
                 for tool_call in tool_calls:
                     fn_data = tool_call.get("function", {})
                     fn_name = fn_data.get("name")
+                    if fn_name:
+                        executed_tools.append(fn_name)
                     try:
                         fn_args = json.loads(fn_data.get("arguments", "{}"))
                     except Exception:
@@ -1847,30 +1887,38 @@ class ActionLLMResponse(Action):
 
                 tool_iterations += 1
             else:
+                has_structured_tool = any(t in STRUCTURED_OUTPUT_TOOLS for t in executed_tools)
+                if has_structured_tool:
+                    synth_tokens = STRUCTURED_MAX_TOKENS
+                    synth_instruction = (
+                        "Synthesize the above tool findings into a clean, direct Markdown response in natural Hinglish. "
+                        "Return the result first. Keep explanation minimal."
+                    )
+                else:
+                    synth_tokens = SYNTHESIS_CONCISE_MAX_TOKENS
+                    synth_instruction = (
+                        "Provide a short, direct 1–2 sentence answer in natural Hinglish with the exact result. "
+                        "Answer first, keep it under 30-40 words. No filler, no internal narration. Use 0-2 emojis."
+                    )
+
                 curr_messages.append({
                     "role": "user",
-                    "content": "Please synthesize the above tool findings and reply in natural Hinglish."
+                    "content": synth_instruction
                 })
                 synth_content, _, _ = LLMProviderManager.call_chat_completion(
                     messages=curr_messages,
-                    temperature=0.7,
-                    max_tokens=900
+                    temperature=0.3,
+                    max_tokens=synth_tokens
                 )
                 final_text = synth_content
 
             if final_text:
                 dispatcher.utter_message(text=final_text)
             else:
-                dispatcher.utter_message(text="Arre bhai, thoda sa network glitch aa gaya AI services mein! Ek baar dubara message karo?")
+                dispatcher.utter_message(text="⚠️ AI service unavailable hai. Thodi der baad try karo.")
         except Exception as e:
             logger.error(f"ActionLLMResponse unexpected error: {e}", exc_info=True)
-            dispatcher.utter_message(text="Sorry, AI service is temporarily unavailable, please try again in a moment.")
-
-        except Exception as e:
-            logger.error(f"Error in ActionLLMResponse: {e}", exc_info=True)
-            dispatcher.utter_message(
-                text="Arre bhai, thoda sa technical glitch aa gaya connection me. Thodi der baad try karo na!"
-            )
+            dispatcher.utter_message(text="⚠️ AI service unavailable hai. Thodi der baad try karo.")
 
         return []
 
