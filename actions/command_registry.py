@@ -622,11 +622,10 @@ COMMAND_REGISTRY: List[CommandInfo] = [
     CommandInfo(
         name="code",
         syntax="/code <task>",
-        description="OpenCode MCP shell execution & coding engine",
+        description="(Advanced) OpenCode MCP shell execution & coding engine",
         category="💻 Developer & MCP Tools",
         aliases=["bash", "terminal"],
-        native_menu=True,
-        menu_description="💻 Coding engine via OpenCode"
+        native_menu=False  # Host shell access: functional but not exposed to ordinary users
     ),
     CommandInfo(
         name="sh",
@@ -661,8 +660,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Knowledge Graph & relational memory explorer",
         category="💻 Developer & MCP Tools",
         aliases=["knowledge", "relations"],
-        native_menu=True,
-        menu_description="🧠 Knowledge Graph memory"
+        native_menu=False  # Internal memory tool: functional but not in the user menu
     ),
     CommandInfo(
         name="github",
@@ -1271,10 +1269,22 @@ def get_all_commands() -> List[CommandInfo]:
 def generate_help_text(user_id: Optional[str] = None) -> str:
     """
     Dynamically generates structured categorized markdown for /help, /menu, /commands.
+    Admin-only commands are shown only to administrators (user_id=None shows all,
+    which is used by tests/legacy callers).
     """
+    show_admin = True
+    if user_id is not None:
+        try:
+            from . import db as app_db
+            show_admin = app_db.is_admin_user(str(user_id))
+        except Exception:
+            show_admin = False
+
     categories: Dict[str, List[CommandInfo]] = {}
     for cmd in COMMAND_REGISTRY:
         if not cmd.enabled:
+            continue
+        if cmd.admin_only and not show_admin:
             continue
         categories.setdefault(cmd.category, []).append(cmd)
 

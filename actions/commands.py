@@ -82,6 +82,31 @@ def handle_slash_command(
     attachment_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
+    Public entrypoint for slash command dispatch.
+    Guarantees a safe, user-friendly response on any unexpected failure:
+    technical details go to logs, never to the user.
+    """
+    try:
+        return _dispatch_slash_command(command_text, user_id, chat_id, attachment_path)
+    except Exception:
+        logger.exception(f"Unhandled error while executing command '{command_text}' for user {user_id}")
+        return {
+            "handled": True,
+            "text": (
+                "❌ **Something went wrong while running that command.**\n"
+                "The issue has been logged. Please try again in a moment.\n"
+                "_If it keeps failing, use `/help` to see available commands._"
+            ),
+        }
+
+
+def _dispatch_slash_command(
+    command_text: str,
+    user_id: str,
+    chat_id: str,
+    attachment_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
     Directly processes Telegram slash commands with deterministic argument parsing.
     Returns a dict with:
       - 'handled': bool
@@ -336,7 +361,6 @@ def handle_slash_command(
             orig, dest = parts[0].strip(), parts[1].strip()
             # Calculate distance using OpenRouteService for accurate fare
             eta_res = utils.get_commute_eta(orig, dest)
-            import re
             m = re.search(r"(\d+\.?\d*)\s*km", eta_res)
             dist_km = float(m.group(1)) if m else 10.0
             cab_res = utils.estimate_cab_fare(dist_km)
@@ -379,15 +403,29 @@ def handle_slash_command(
     elif cmd == "/calendar":
         return {"handled": True, "text": prod.list_calendar_events()}
 
-    # 35. /github <repo>
+    # 35. /github [repo_or_url_or_username]
     elif cmd == "/github":
         if not args_str:
             return {"handled": True, "text": prod.list_github_repos()}
-        if "/" in args_str:
-            issues = prod.list_github_issues(args_str)
-            prs = prod.list_github_prs(args_str)
-            return {"handled": True, "text": f"{issues}\n\n---\n\n{prs}"}
-        return {"handled": True, "text": prod.list_github_repos(username_or_org=args_str)}
+        owner_repo = prod.parse_github_repo(args_str)
+        if owner_repo:
+            overview = prod.get_github_repo_info(owner_repo)
+            issues = prod.list_github_issues(owner_repo)
+            prs = prod.list_github_prs(owner_repo)
+            return {"handled": True, "text": f"{overview}\n\n---\n\n{issues}\n\n---\n\n{prs}"}
+        # Bare username (not a repo) -> list that account's repositories
+        clean_name = args_str.strip().lstrip("@").rstrip("/")
+        if re.match(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$", clean_name):
+            return {"handled": True, "text": prod.list_github_repos(username_or_org=clean_name)}
+        return {
+            "handled": True,
+            "text": (
+                "❓ **Invalid GitHub target.** Use a repository (`owner/repo` or full URL), "
+                "or a username to list their repos.\n"
+                "**Examples:** `/github msitarzewski/agency-agents` • "
+                "`/github https://github.com/psf/requests` • `/github octocat`"
+            ),
+        }
 
     # 36. /code, /sh, /exec, /bash, /terminal <command or task>
     elif cmd in ["/code", "/sh", "/exec", "/bash", "/terminal", "/run"]:
@@ -993,10 +1031,10 @@ def handle_slash_command(
 
         return {"handled": True, "text": "\n".join(lines)}
 
-    # 122. /voice <text> or /tts <text> (Realistic Neural Voice Note)
-    elif cmd in ["/voice", "/tts", "/audio", "/voicenote"]:
+    # 122. /voicenote <text> (Neural Voice Note — distinct from /voice /tts handled above)
+    elif cmd in ["/voicenote"]:
         if not args_str:
-            return {"handled": True, "text": "🎙️ **Voice Note Usage:** `/voice <text>` (e.g. `/voice Namaste! Alya bot me aapka swagat hai.`)"}
+            return {"handled": True, "text": "🎙️ **Voice Note Usage:** `/voicenote <text>` (e.g. `/voicenote Namaste! Alya bot me aapka swagat hai.`)"}
         success, fpath, msg = superpack.generate_voice_note(args_str)
         if success and fpath:
             return {"handled": True, "text": msg, "file_path": fpath, "file_type": "audio"}

@@ -26,18 +26,53 @@ logger = logging.getLogger(__name__)
 # 20. Reminders (Timezone-aware, IST default, single-execution)
 # ---------------------------------------------------------------------------
 
+_REMIND_USAGE_ERROR = (
+    "⏰ I couldn't understand that time.\n\n"
+    "**Usage:** `/remind <time> <message>`\n"
+    "**Examples:**\n"
+    "• `/remind in 2 hours Take medicine`\n"
+    "• `/remind tomorrow at 9 AM Team standup`\n"
+    "• `/remind 11:00 PM Lock the door`\n"
+    "• `/remind every day at 8 AM Morning walk`"
+)
+
+
 def create_reminder(user_id: str, chat_id: str, text: str, time_str: str) -> str:
     """
     Creates a time-based reminder with exact timezone handling (default: Asia/Kolkata / IST).
     `time_str` can be '11:00 AM', 'at 11 AM', 'tomorrow at 9am', 'in 2 hours', '11 AM EST', etc.
+    Invalid/unparseable times return a friendly usage error (no junk rows are ever created).
     """
+    if not time_str or not time_str.strip():
+        # No explicit time found by the splitter; maybe the whole input IS a time
+        # expression like '/remind tomorrow'. If so, schedule with a generic label.
+        candidate = (text or "").strip()
+        try:
+            parse_natural_datetime(candidate, user_tz=db.get_user_timezone(user_id))
+            text, time_str = "Reminder", candidate
+        except Exception:
+            return _REMIND_USAGE_ERROR
+
     user_tz = db.get_user_timezone(user_id)
-    due_dt, effective_tz, formatted_display, is_recurring, recurrence_pattern = parse_natural_datetime(
-        time_str, user_tz=user_tz
-    )
+    try:
+        due_dt, effective_tz, formatted_display, is_recurring, recurrence_pattern = parse_natural_datetime(
+            time_str, user_tz=user_tz
+        )
+    except ValueError as e:
+        return _REMIND_USAGE_ERROR
 
     due_utc_iso = to_utc_iso(due_dt)
     tz_name_str = str(effective_tz)
+
+    # Deduplicate: one reminder definition -> exactly one scheduled job.
+    existing = db.find_active_duplicate_reminder(user_id, text.strip(), due_utc_iso, "general")
+    if existing:
+        return (
+            f"ℹ️ **You already have this reminder scheduled** (ID: #{existing['id']}).\n"
+            f"• Note: **{text.strip()}**\n"
+            f"• Scheduled for: `{formatted_display}`\n"
+            f"_Use `/reminders` to view it or `/delremind {existing['id']}` to cancel._"
+        )
 
     rem_id = db.add_reminder(
         user_id=user_id,
@@ -111,21 +146,49 @@ def set_user_timezone_preference(user_id: str, tz_input: str) -> str:
 # -------------------------------------------------------------
 
 def add_medicine_schedule(user_id: str, name: str, dosage: str, schedule_time: str, instructions: str = "") -> str:
-    """Adds a recurring medicine reminder with proper timezone resolution."""
+    """
+    Adds a recurring medicine reminder with proper timezone resolution.
+    Rejects unparseable times and duplicate active schedules (no junk recurring jobs).
+    """
+    if not name or not name.strip() or not schedule_time or not schedule_time.strip():
+        return (
+            "💊 **Medicine Reminder Usage:** `/medremind <time> <medicine_name>`\n"
+            "**Example:** `/medremind 9:00 AM Paracetamol 500mg`"
+        )
+
     user_tz = db.get_user_timezone(user_id)
-    due_dt, effective_tz, formatted_display, is_recurring, recurrence_pattern = parse_natural_datetime(
-        schedule_time, user_tz=user_tz
-    )
+    try:
+        due_dt, effective_tz, formatted_display, is_recurring, recurrence_pattern = parse_natural_datetime(
+            schedule_time, user_tz=user_tz
+        )
+    except ValueError:
+        return (
+            "💊 I couldn't understand that time.\n\n"
+            "**Usage:** `/medremind <time> <medicine_name>`\n"
+            "**Examples:** `/medremind 9:00 AM Paracetamol` • `/medremind every day at 10 PM Azithral 500`"
+        )
+
     due_utc_iso = to_utc_iso(due_dt)
     tz_name_str = str(effective_tz)
+    reminder_text = f"{name.strip()} ({dosage}) - {instructions or 'Take with water'}"
+
+    # Deduplicate: identical active medicine schedule -> single job only.
+    existing = db.find_active_duplicate_reminder(user_id, reminder_text, due_utc_iso, "medicine")
+    if existing:
+        return (
+            f"ℹ️ **This medicine schedule is already active** (Reminder ID: #{existing['id']}).\n"
+            f"• Medicine: **{name.strip()}**\n"
+            f"• Daily at: `{formatted_display}`\n"
+            f"_Use `/delremind {existing['id']}` to cancel it first._"
+        )
 
     # Add medicine entry
-    med_id = db.add_medicine(user_id, name, dosage, schedule_time, instructions)
+    med_id = db.add_medicine(user_id, name.strip(), dosage, formatted_display, instructions)
     # Add linked daily recurring reminder
     db.add_reminder(
         user_id=user_id,
         chat_id=user_id,
-        text=f"{name} ({dosage}) - {instructions or 'Take with water'}",
+        text=reminder_text,
         due_time=due_utc_iso,
         reminder_type="medicine",
         is_recurring=1,
@@ -135,7 +198,7 @@ def add_medicine_schedule(user_id: str, name: str, dosage: str, schedule_time: s
 
     return (
         f"💊 **Medicine Schedule Added (ID: #{med_id}):**\n"
-        f"• Medicine: **{name}**\n"
+        f"• Medicine: **{name.strip()}**\n"
         f"• Dosage: `{dosage}`\n"
         f"• Scheduled Time: `{formatted_display}` (Daily)\n"
         f"• Instructions: {instructions or 'Take with water'}"

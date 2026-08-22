@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import logging
 from datetime import datetime, timezone
@@ -324,15 +325,142 @@ def send_outlook_email(to: str, subject: str, body: str) -> str:
 # 3. GitHub Account Integration (Repos, Issues, PRs)
 # ---------------------------------------------------------------------------
 
+_GITHUB_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}/[A-Za-z0-9._-]{1,100}$")
+
+
+def parse_github_repo(user_input: str) -> Optional[str]:
+    """
+    Normalizes any supported input into a clean 'owner/repo' string.
+
+    Supported inputs:
+      - owner/repo
+      - https://github.com/owner/repo
+      - http://www.github.com/owner/repo.git
+      - github.com/owner/repo/tree/main
+      - https://api.github.com/repos/owner/repo
+      - @owner/repo
+
+    Returns None if the input cannot be resolved to a valid owner/repo pair.
+    """
+    if not user_input:
+        return None
+    text = user_input.strip().strip("<>").rstrip("/").lstrip("@")
+    # Strip URL scheme/host variants
+    text = re.sub(r"^(?:https?://)?(?:www\.|api\.)?(?:github\.com|ghe\.[^/]+)/?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^repos/", "", text, flags=re.IGNORECASE)
+    # Drop extra path segments (tree/main, issues/123, .git suffix)
+    parts = [p for p in text.split("/") if p]
+    if len(parts) >= 2:
+        candidate = f"{parts[0]}/{parts[1]}"
+    elif len(parts) == 1:
+        return None  # bare username, not a repo
+    else:
+        return None
+    candidate = candidate.removesuffix(".git")
+    if not _GITHUB_REPO_RE.match(candidate):
+        return None
+    return candidate
+
+
 def get_github_headers() -> Dict[str, str]:
     token = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN") or os.getenv("GITHUB_TOKEN") or ""
     headers = {
-        "Accept": "application/vnd.github.v3+json",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "Alya-Rasa-Bot/1.0"
     }
     if token:
         headers["Authorization"] = f"token {token}"
     return headers
+
+
+def _github_api_error(resp: "requests.Response", context: str) -> str:
+    """Maps a failed GitHub REST response to a concise, useful user-facing message.
+    Full technical details are logged internally, never shown to users."""
+    detail = ""
+    try:
+        body = resp.json()
+        detail = body.get("message") or str(body)[:200]
+    except Exception:
+        detail = (resp.text or "")[:200]
+
+    logger.error(f"GitHub API {context} failed: HTTP {resp.status_code} - {detail}")
+
+    if resp.status_code == 404:
+        return (
+            f"❌ **Not Found:** That GitHub target does not exist or is private.\n"
+            f"Check the spelling, e.g. `/github octocat/Hello-World`."
+        )
+    if resp.status_code == 401:
+        return (
+            "❌ **GitHub authentication failed:** the configured `GITHUB_PERSONAL_ACCESS_TOKEN` "
+            "is invalid or expired.\n_Ask the bot admin to update it in `.env`._"
+        )
+    if resp.status_code == 403:
+        reset_hdr = resp.headers.get("X-RateLimit-Reset")
+        if resp.headers.get("X-RateLimit-Remaining") == "0" and reset_hdr:
+            try:
+                reset_dt = datetime.fromtimestamp(int(reset_hdr), tz=timezone.utc)
+                mins = max(1, int((reset_dt - datetime.now(timezone.utc)).total_seconds() // 60) + 1)
+                return (
+                    f"⏳ **GitHub API rate limit reached.** The limit resets in ~{mins} minute(s).\n"
+                    "_Admins can raise limits by configuring `GITHUB_PERSONAL_ACCESS_TOKEN` in `.env`._"
+                )
+            except Exception:
+                pass
+        return "❌ **GitHub access forbidden** for this resource (permissions or abuse limits)."
+    if resp.status_code == 422:
+        return f"❌ **GitHub rejected that request** as invalid (validation failed for {context})."
+    if resp.status_code >= 500:
+        return "⚠️ **GitHub is having temporary server problems.** Please try again in a few minutes."
+
+    return f"❌ **GitHub request failed** ({resp.status_code}). Please try again later."
+
+
+def get_github_repo_info(repo: str) -> str:
+    """Fetches a repository overview via GET /repos/{owner}/{repo}.
+    Accepts full URLs, 'owner/repo', or fails with a friendly error."""
+    owner_repo = parse_github_repo(repo)
+    if not owner_repo:
+        return (
+            "❓ **Invalid repository format.** Use `owner/repo` or a full GitHub URL.\n"
+            "**Examples:** `/github msitarzewski/agency-agents` • "
+            "`/github https://github.com/psf/requests`"
+        )
+
+    headers = get_github_headers()
+    from urllib.parse import quote as urlquote
+    safe = "/".join(urlquote(p, safe="") for p in owner_repo.split("/"))
+
+    try:
+        resp = requests.get(f"https://api.github.com/repos/{safe}", headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return _github_api_error(resp, f"repo lookup '{owner_repo}'")
+
+        r = resp.json()
+        desc = r.get("description") or "_No description_"
+        stars = r.get("stargazers_count", 0)
+        forks = r.get("forks_count", 0)
+        watchers = r.get("subscribers_count", 0)
+        open_issues = r.get("open_issues_count", 0)
+        lang = r.get("language") or "Unknown"
+        license_name = ((r.get("license") or {}).get("spdx_id") or "None")
+        updated = (r.get("updated_at") or "")[:10]
+        topics = ", ".join(r.get("topics") or []) or "-"
+        private = "🔒 Private" if r.get("private") else "🌍 Public"
+
+        return (
+            f"🐙 **{owner_repo}** {private}\n\n"
+            f"• 📝 {desc}\n"
+            f"• ⭐ Stars: **{stars}** | 🍴 Forks: **{forks}** | 👀 Watchers: **{watchers}**\n"
+            f"• 🐞 Open Issues: **{open_issues}** | 💻 Language: `{lang}` | ⚖️ License: `{license_name}`\n"
+            f"• 🏷️ Topics: {topics}\n"
+            f"• 🔄 Last Updated: `{updated}`\n"
+            f"• 🔗 {r.get('html_url')}"
+        )
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GitHub repo lookup network error: {e}")
+        return "⚠️ **Could not reach GitHub.** Please check the connection and try again."
 
 
 def list_github_repos(username_or_org: Optional[str] = None, max_results: int = 6) -> str:
@@ -342,13 +470,14 @@ def list_github_repos(username_or_org: Optional[str] = None, max_results: int = 
 
     try:
         if username_or_org:
-            url = f"https://api.github.com/users/{username_or_org}/repos?sort=updated&per_page={max_results}"
+            from urllib.parse import quote as urlquote
+            url = f"https://api.github.com/users/{urlquote(username_or_org.strip().lstrip('@'), safe='')}/repos?sort=updated&per_page={max_results}"
         elif token:
-            url = f"https://api.github.com/user/repos?sort=updated&per_page={max_results}"
+            url = f"https://api.github.com/user/repos?sort=updated&per_page={max_results}&affiliation=owner,collaborator,organization_member"
         else:
             return (
-                "⚠️ GitHub access requires either specifying a public username (e.g. `list repos for octocat`) "
-                "or adding `GITHUB_PERSONAL_ACCESS_TOKEN` to `.env`."
+                "⚠️ GitHub access requires either specifying a username "
+                "(e.g. `/github octocat`) or adding `GITHUB_PERSONAL_ACCESS_TOKEN` to `.env`."
             )
 
         resp = requests.get(url, headers=headers, timeout=10)
@@ -363,70 +492,98 @@ def list_github_repos(username_or_org: Optional[str] = None, max_results: int = 
                 stars = r.get("stargazers_count", 0)
                 forks = r.get("forks_count", 0)
                 lang = r.get("language") or "Code"
-                lines.append(f"📁 [{r.get('name')}]({r.get('html_url')}) ⭐ {stars} | 🍴 {forks} | `{lang}`\n   _{desc}_")
+                full = r.get("full_name") or r.get("name")
+                lines.append(f"📁 [{full}]({r.get('html_url')}) ⭐ {stars} | 🍴 {forks} | `{lang}`\n   _{desc}_")
             return f"🐙 **GitHub Repositories ({username_or_org or 'Authenticated User'}):**\n\n" + "\n\n".join(lines)
-        else:
-            return f"❌ GitHub API Error ({resp.status_code}): {resp.json().get('message', resp.text)}"
+        return _github_api_error(resp, f"repo list '{username_or_org or 'authenticated user'}'")
 
-    except Exception as e:
-        return f"❌ Failed to fetch GitHub repos: {str(e)}"
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GitHub repo list network error: {e}")
+        return "⚠️ **Could not reach GitHub.** Please check the connection and try again."
 
 
 def list_github_issues(repo: str, state: str = "open", max_results: int = 5) -> str:
-    """Lists issues in a repository (owner/repo)."""
+    """Lists issues in a repository (accepts 'owner/repo' or a full GitHub URL)."""
+    owner_repo = parse_github_repo(repo)
+    if not owner_repo:
+        return (
+            "❓ **Invalid repository format.** Use `owner/repo` or a full GitHub URL "
+            "(e.g. `/github octocat/Hello-World`)."
+        )
+
     headers = get_github_headers()
+    from urllib.parse import quote as urlquote
+    safe = "/".join(urlquote(p, safe="") for p in owner_repo.split("/"))
     try:
-        url = f"https://api.github.com/repos/{repo}/issues?state={state}&per_page={max_results}"
+        url = f"https://api.github.com/repos/{safe}/issues?state={state}&per_page={max_results}"
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             issues = resp.json()
             # Filter out pull requests
             issues = [i for i in issues if "pull_request" not in i]
             if not issues:
-                return f"🐙 No {state} issues found in `{repo}`."
+                return f"🐙 No {state} issues found in `{owner_repo}`."
 
             lines = []
             for i in issues:
                 lines.append(f"🐞 [#{i.get('number')} {i.get('title')}]({i.get('html_url')}) by @{i.get('user', {}).get('login')} ({i.get('state')})")
-            return f"🐙 **GitHub Issues for `{repo}`:**\n\n" + "\n".join(lines)
-        return f"❌ GitHub API error ({resp.status_code}): {resp.text}"
-    except Exception as e:
-        return f"❌ Failed to list GitHub issues: {str(e)}"
+            return f"🐙 **GitHub Issues for `{owner_repo}`:**\n\n" + "\n".join(lines)
+        return _github_api_error(resp, f"issues lookup '{owner_repo}'")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GitHub issues network error: {e}")
+        return "⚠️ **Could not reach GitHub.** Please check the connection and try again."
 
 
 def create_github_issue(repo: str, title: str, body: str = "") -> str:
     """Creates a new issue in a GitHub repository."""
+    owner_repo = parse_github_repo(repo)
+    if not owner_repo:
+        return "❓ **Invalid repository format.** Use `owner/repo` or a full GitHub URL."
+
     headers = get_github_headers()
     token = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN") or os.getenv("GITHUB_TOKEN")
     if not token:
         return "⚠️ `GITHUB_PERSONAL_ACCESS_TOKEN` is required in `.env` to create GitHub issues."
 
     try:
-        url = f"https://api.github.com/repos/{repo}/issues"
+        from urllib.parse import quote as urlquote
+        safe = "/".join(urlquote(p, safe="") for p in owner_repo.split("/"))
+        url = f"https://api.github.com/repos/{safe}/issues"
         payload = {"title": title, "body": body}
         resp = requests.post(url, headers=headers, json=payload, timeout=10)
         if resp.status_code == 201:
             data = resp.json()
             return f"✅ GitHub issue created: [#{data.get('number')} {title}]({data.get('html_url')})"
-        return f"❌ Failed to create issue ({resp.status_code}): {resp.text}"
-    except Exception as e:
-        return f"❌ GitHub issue error: {str(e)}"
+        return _github_api_error(resp, f"issue creation in '{owner_repo}'")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GitHub issue creation network error: {e}")
+        return "⚠️ **Could not reach GitHub.** Please check the connection and try again."
 
 
 def list_github_prs(repo: str, state: str = "open", max_results: int = 5) -> str:
-    """Lists pull requests for a repository."""
+    """Lists pull requests for a repository (accepts 'owner/repo' or a full GitHub URL)."""
+    owner_repo = parse_github_repo(repo)
+    if not owner_repo:
+        return (
+            "❓ **Invalid repository format.** Use `owner/repo` or a full GitHub URL "
+            "(e.g. `/github octocat/Hello-World`)."
+        )
+
     headers = get_github_headers()
+    from urllib.parse import quote as urlquote
+    safe = "/".join(urlquote(p, safe="") for p in owner_repo.split("/"))
     try:
-        url = f"https://api.github.com/repos/{repo}/pulls?state={state}&per_page={max_results}"
+        url = f"https://api.github.com/repos/{safe}/pulls?state={state}&per_page={max_results}"
         resp = requests.get(url, headers=headers, timeout=10)
         if resp.status_code == 200:
             prs = resp.json()
             if not prs:
-                return f"🐙 No {state} pull requests in `{repo}`."
+                return f"🐙 No {state} pull requests in `{owner_repo}`."
             lines = []
             for pr in prs:
                 lines.append(f"🔀 [#{pr.get('number')} {pr.get('title')}]({pr.get('html_url')}) by @{pr.get('user', {}).get('login')} (`{pr.get('head', {}).get('ref')}` -> `{pr.get('base', {}).get('ref')}`)")
-            return f"🐙 **GitHub Pull Requests for `{repo}`:**\n\n" + "\n".join(lines)
-        return f"❌ GitHub API error ({resp.status_code}): {resp.text}"
-    except Exception as e:
-        return f"❌ Failed to fetch PRs: {str(e)}"
+            return f"🐙 **GitHub Pull Requests for `{owner_repo}`:**\n\n" + "\n".join(lines)
+        return _github_api_error(resp, f"pulls lookup '{owner_repo}'")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GitHub PRs network error: {e}")
+        return "⚠️ **Could not reach GitHub.** Please check the connection and try again."

@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _SCHEDULER_RUNNING = False
 _SCHEDULER_LOCK = threading.Lock()
+_CLAIM_LOCK = threading.Lock()  # extra in-process safety net on top of BEGIN IMMEDIATE
+_MAX_RETRY_AGE_HOURS = 24  # one-shot reminders older than this are marked failed, not retried forever
 
 
 def send_telegram_alert(chat_id: str, message: str) -> bool:
@@ -120,8 +122,25 @@ def _check_and_fire_reminders() -> int:
             next_utc_iso = to_utc_iso(next_dt_user)
             db.update_reminder_next_run(rem_id, next_utc_iso)
             logger.info(f"Advanced recurring reminder #{rem_id} to next run: {next_dt_user.isoformat()} ({next_utc_iso})")
-        else:
+        elif sent:
             db.mark_reminder_fired(rem_id)
+        else:
+            # Delivery failed (network/Telegram error): requeue for retry instead of
+            # silently dropping the reminder. Give up only if it is >24h overdue.
+            try:
+                due_dt_utc = datetime.fromisoformat(due_iso.replace("Z", "+00:00"))
+                if due_dt_utc.tzinfo is None:
+                    due_dt_utc = due_dt_utc.replace(tzinfo=timezone.utc)
+                overdue_hours = (datetime.now(timezone.utc) - due_dt_utc).total_seconds() / 3600
+            except Exception:
+                overdue_hours = 0.0
+            if overdue_hours >= _MAX_RETRY_AGE_HOURS:
+                db.mark_reminder_failed(rem_id)
+                logger.error(f"Reminder #{rem_id} marked failed after {int(overdue_hours)}h of delivery retries.")
+            else:
+                retry_iso = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+                db.update_reminder_next_run(rem_id, retry_iso)
+                logger.warning(f"Reminder #{rem_id} delivery failed; requeued for retry at {retry_iso}")
 
         fired_count += 1
 
@@ -131,9 +150,17 @@ def _check_and_fire_reminders() -> int:
 def _scheduler_loop():
     """Background polling loop executed in a single daemon thread."""
     logger.info("Alya Timezone-Aware Background Scheduler loop started.")
+    # Crash recovery: requeue reminders stuck 'in_flight' from a previous process,
+    # and expire one-shot reminders that are more than 24h overdue.
+    try:
+        db.reset_stale_in_flight_reminders()
+    except Exception as e:
+        logger.error(f"Scheduler startup recovery failed: {e}", exc_info=True)
+
     while True:
         try:
-            _check_and_fire_reminders()
+            with _CLAIM_LOCK:
+                _check_and_fire_reminders()
         except Exception as e:
             logger.error(f"Error in scheduler check: {e}", exc_info=True)
         time.sleep(15)  # Poll every 15 seconds for responsiveness

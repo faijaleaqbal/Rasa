@@ -2,12 +2,16 @@ import os
 import sqlite3
 import json
 import logging
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "storage", "data.db")
+# Production DB lives in storage/data.db. Tests MUST set ALYA_DB_PATH (see tests/conftest.py)
+# so they never read/write production user data.
+DB_PATH = os.environ.get("ALYA_DB_PATH") or os.path.join(
+    os.path.dirname(__file__), "..", "storage", "data.db"
+)
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -470,22 +474,82 @@ def get_due_reminders(now_utc_iso: str) -> List[Dict[str, Any]]:
 def claim_due_reminders(now_utc_iso: str) -> List[Dict[str, Any]]:
     """
     Atomically claims due reminders by transitioning status from 'pending' to 'in_flight'.
-    Guarantees no duplicate job triggers across concurrent threads or scheduler iterations.
+    Uses BEGIN IMMEDIATE so concurrent threads/processes can never claim the same row,
+    and only returns rows whose status was actually flipped (zero duplicate firing).
+    """
+    conn = get_db_connection()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM reminders WHERE status = 'pending' AND due_time <= ? ORDER BY due_time ASC",
+            (now_utc_iso,)
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+        claimed: List[Dict[str, Any]] = []
+        if rows:
+            ids = [r["id"] for r in rows]
+            placeholders = ",".join("?" for _ in ids)
+            cursor.execute(
+                f"UPDATE reminders SET status = 'in_flight' WHERE id IN ({placeholders}) AND status = 'pending'",
+                ids
+            )
+            # Re-check which rows this transaction actually flipped to 'in_flight'
+            q = ",".join("?" for _ in ids)
+            cursor.execute(
+                f"SELECT id FROM reminders WHERE id IN ({q}) AND status = 'in_flight'",
+                ids
+            )
+            flipped_ids = {row["id"] for row in cursor.fetchall()}
+            claimed = [r for r in rows if r["id"] in flipped_ids]
+        conn.commit()
+        return claimed
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def reset_stale_in_flight_reminders(older_than_minutes: int = 5) -> int:
+    """
+    Startup/crash recovery: re-queues reminders stuck in 'in_flight' (e.g. process died
+    mid-dispatch) so they are never silently lost. Returns number of rows requeued.
+    Rows older than 24h past due are marked 'failed' instead of re-firing forever.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=older_than_minutes)).isoformat()
     cursor.execute(
-        "SELECT * FROM reminders WHERE status = 'pending' AND due_time <= ? ORDER BY due_time ASC",
-        (now_utc_iso,)
+        "UPDATE reminders SET status = 'pending' WHERE status = 'in_flight' AND due_time <= ?",
+        (cutoff,)
     )
-    rows = [dict(row) for row in cursor.fetchall()]
-    if rows:
-        ids = [r["id"] for r in rows]
-        placeholders = ",".join("?" for _ in ids)
-        cursor.execute(f"UPDATE reminders SET status = 'in_flight' WHERE id IN ({placeholders}) AND status = 'pending'", ids)
-        conn.commit()
+    requeued = cursor.rowcount
+    day_cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    cursor.execute(
+        "UPDATE reminders SET status = 'failed' WHERE status IN ('pending','in_flight') AND due_time < ?",
+        (day_cutoff,)
+    )
+    failed = cursor.rowcount
+    conn.commit()
     conn.close()
-    return rows
+    if requeued or failed:
+        logger.info(f"Scheduler recovery: requeued {requeued} stale in-flight reminders, expired {failed} overdue >24h.")
+    return requeued
+
+
+def find_active_duplicate_reminder(user_id: str, text: str, due_time: str, reminder_type: str = "general") -> Optional[Dict[str, Any]]:
+    """Returns an existing active (pending/in_flight) identical reminder, for dedup on creation."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM reminders WHERE user_id = ? AND text = ? AND due_time = ? AND reminder_type = ? "
+        "AND status IN ('pending','in_flight') LIMIT 1",
+        (str(user_id), text.strip(), due_time, reminder_type)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def update_reminder_next_run(reminder_id: int, next_due_utc_iso: str) -> None:

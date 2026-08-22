@@ -265,8 +265,12 @@ def parse_natural_datetime(
             if due_dt <= now:
                 due_dt += timedelta(days=1)
         except Exception:
-            # Default fallback: 1 hour from now
-            due_dt = now + timedelta(hours=1)
+            # Unparseable time: raise instead of silently scheduling "+1 hour".
+            # (Silent fallback previously created junk recurring reminders.)
+            raise ValueError(
+                f"Could not understand the time '{time_str}'. "
+                "Try formats like 'in 2 hours', 'tomorrow at 9 AM', '11:00 PM', or 'every day at 8 AM'."
+            )
 
     # Final guarantee: ensure timezone is set and valid
     if due_dt.tzinfo is None:
@@ -360,8 +364,15 @@ def split_reminder_command(args_str: str) -> Tuple[str, str]:
     tokens = clean.split(maxsplit=2)
     if len(tokens) >= 3 and tokens[0].lower() in ("in", "at", "tomorrow", "every", "on"):
         return (f"{tokens[0]} {tokens[1]}", tokens[2])
-    elif len(tokens) >= 2:
-        return (tokens[0], tokens[1])
-    else:
-        return (clean, "General reminder")
+    elif len(tokens) >= 2 and _looks_like_time_token(tokens[0]):
+        return (tokens[0], " ".join(tokens[1:]))
+    # No recognizable time expression found. Return empty time part so callers can
+    # show a usage error instead of silently scheduling junk ("test argument" bug).
+    return ("", clean)
+
+
+def _looks_like_time_token(token: str) -> bool:
+    """Cheap check whether the first token resembles a clock/relative time expression."""
+    t = token.lower().strip(",.")
+    return bool(re.match(r"^\d{1,2}(:\d{2})?\s*(am|pm)?$", t) or re.match(r"^(?:in|at|tomorrow|today|tonight|every|daily)$", t))
 

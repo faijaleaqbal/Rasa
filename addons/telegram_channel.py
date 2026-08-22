@@ -609,7 +609,11 @@ class SmartTelegramInput(TelegramInput):
                                 return response.text("success")
                         except Exception as e:
                             logger.error(f"Error handling direct command: {e}", exc_info=True)
-                            await out_channel.send_text_message(sender_id, f"❌ Error executing command: {e}")
+                            await out_channel.send_text_message(
+                                sender_id,
+                                "❌ **Something went wrong while running that command.** "
+                                "It has been logged — please try again in a moment."
+                            )
                             return response.text("success")
 
                     # 4. Dispatch Normal Conversational Message to Rasa AI Pipeline
