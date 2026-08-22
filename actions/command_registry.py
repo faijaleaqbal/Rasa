@@ -42,7 +42,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Browse Govt photo, Passport, Social Media & Print presets",
         category="🖼️ Image Tools & Passport Studio",
         aliases=["imagepresets"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📋 Govt photo, Passport & Social presets"
     ),
     CommandInfo(
@@ -69,7 +69,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Photo EXIF metadata inspector & GPS location finder",
         category="🖼️ Image Tools & Passport Studio",
         aliases=["metadata", "photoinfo"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📷 Photo EXIF inspector & GPS location"
     ),
     CommandInfo(
@@ -133,7 +133,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Side-by-side AI specs, pros/cons & tech comparison",
         category="🤖 AI & Super-Skills",
         aliases=["vs", "diff", "difference"],
-        native_menu=True,
+        native_menu=False,
         menu_description="⚔️ Side-by-side AI specs comparison"
     ),
     CommandInfo(
@@ -151,7 +151,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Today in History major events, milestones & famous birthdays",
         category="🤖 AI & Super-Skills",
         aliases=["history", "onthisday", "dayinhistory"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📜 Today in History milestones"
     ),
     CommandInfo(
@@ -160,7 +160,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Daily astrological predictions, career, love & lucky numbers",
         category="🤖 AI & Super-Skills",
         aliases=["zodiac", "rashi", "kundali", "astrology"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🔮 Daily Zodiac & Horoscope guidance"
     ),
     CommandInfo(
@@ -169,7 +169,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Top 5 trending tech & startup stories from Hacker News",
         category="🤖 AI & Super-Skills",
         aliases=["hn", "technews", "techheadlines"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🔥 Top Hacker News tech stories"
     ),
     CommandInfo(
@@ -178,7 +178,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Gen-Z slangs, internet jargon & idioms decoder",
         category="🤖 AI & Super-Skills",
         aliases=["idiom", "phrase", "jargon", "slangmeaning"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🗣️ Gen-Z slangs & idioms decoder"
     ),
     CommandInfo(
@@ -187,7 +187,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Wayback Machine historical snapshots & deleted page viewer",
         category="🤖 AI & Super-Skills",
         aliases=["archive", "timemachine", "oldweb"],
-        native_menu=True,
+        native_menu=False,
         menu_description="⏳ Wayback Machine history snapshot"
     ),
     CommandInfo(
@@ -246,7 +246,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Direct phone call dialer",
         category="📱 Mobile & Android Automation",
         aliases=["dial", "phonecall"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📞 Make phone call dialer"
     ),
     CommandInfo(
@@ -255,7 +255,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Send SMS text message from phone",
         category="📱 Mobile & Android Automation",
         aliases=["sendtext"],
-        native_menu=True,
+        native_menu=False,
         menu_description="💬 Send SMS text message"
     ),
     CommandInfo(
@@ -264,7 +264,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Read incoming SMS messages from phone inbox",
         category="📱 Mobile & Android Automation",
         aliases=["inboxsms"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📩 Read incoming SMS messages"
     ),
     CommandInfo(
@@ -273,7 +273,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Set phone alarm",
         category="📱 Mobile & Android Automation",
         aliases=["setalarm"],
-        native_menu=True,
+        native_menu=False,
         menu_description="⏰ Set phone alarm"
     ),
     CommandInfo(
@@ -282,7 +282,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Set countdown timer on phone",
         category="📱 Mobile & Android Automation",
         aliases=["settimer"],
-        native_menu=True,
+        native_menu=False,
         menu_description="⏳ Set countdown timer on phone"
     ),
     CommandInfo(
@@ -291,7 +291,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Launch application or open file on phone",
         category="📱 Mobile & Android Automation",
         aliases=["launch", "app"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📱 Launch phone app or open file"
     ),
     CommandInfo(
@@ -317,7 +317,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Sync text directly into phone clipboard",
         category="📱 Mobile & Android Automation",
         aliases=["copy"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📋 Sync text to phone clipboard"
     ),
     CommandInfo(
@@ -326,7 +326,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Direct WhatsApp message & link dispatch",
         category="📱 Mobile & Android Automation",
         aliases=["wa"],
-        native_menu=True,
+        native_menu=False,
         menu_description="💬 Send WhatsApp message"
     ),
     CommandInfo(
@@ -335,7 +335,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Instant native push alert on phone lock screen",
         category="📱 Mobile & Android Automation",
         aliases=["alert", "push"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📲 Push alert to phone lockscreen"
     ),
     CommandInfo(
@@ -364,7 +364,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Indian PAN Card structure validator & category detector",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["pancard", "checkpan"],
-        native_menu=True,
+        native_menu=False,
         menu_description="💳 Indian PAN Card validator"
     ),
     CommandInfo(
@@ -373,7 +373,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Indian GSTIN number & state validator",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["gst", "checkgst"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🏢 Indian GSTIN number validator"
     ),
     CommandInfo(
@@ -382,7 +382,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Universal & Indian Land Unit converter (Bigha, Acre, Guntha, Gaj, SqFt)",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["convertunit", "units", "areaconvert"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📐 Universal & Land unit converter"
     ),
     CommandInfo(
@@ -391,7 +391,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="India Post office branch finder & delivery status",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["dak", "postbranches"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📮 India Post office branch finder"
     ),
     CommandInfo(
@@ -400,7 +400,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="India Post PIN code & area lookup",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["pin", "postal"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📮 India Post PIN code & area lookup"
     ),
     CommandInfo(
@@ -409,7 +409,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Bank branch & IFSC finder (Razorpay API)",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["bank"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🏦 Bank branch & IFSC finder"
     ),
     CommandInfo(
@@ -417,7 +417,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/pnr <10-digit PNR>",
         description="IRCTC train booking & confirmation status",
         category="🇮🇳 Indian Utilities & Markets",
-        native_menu=True,
+        native_menu=False,
         menu_description="🚆 IRCTC PNR booking status"
     ),
     CommandInfo(
@@ -426,7 +426,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Indian Railways live schedule & NTES route",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["railway"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🚆 Live train status & NTES route"
     ),
     CommandInfo(
@@ -435,7 +435,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Live flight status, airline, and radar",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["radar"],
-        native_menu=True,
+        native_menu=False,
         menu_description="✈️ Live flight tracker & radar"
     ),
     CommandInfo(
@@ -444,7 +444,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Live NSE/BSE & global stock quotes & day trend",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["stocks"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📈 Live Stock quote (NSE/BSE)"
     ),
     CommandInfo(
@@ -469,7 +469,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Live 24K/22K 10g Gold & 1kg Silver bullion rates",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["silver", "metals", "bullion"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🪙 Live Gold & Silver rates (India)"
     ),
     CommandInfo(
@@ -494,7 +494,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Real-time live Air Quality Index (PM2.5, PM10 & Health Advisory)",
         category="🇮🇳 Indian Utilities & Markets",
         aliases=["airquality", "pollution"],
-        native_menu=True,
+        native_menu=False,
         menu_description="💨 Real-time Air Quality Index"
     ),
 
@@ -514,7 +514,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="View active scheduled reminders",
         category="⏱️ Reminders & Productivity",
         aliases=["myreminders", "listreminders", "active_reminders"],
-        native_menu=False
+        native_menu=True
     ),
     CommandInfo(
         name="delremind",
@@ -522,7 +522,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Cancel active scheduled reminder",
         category="⏱️ Reminders & Productivity",
         aliases=["delreminder", "cancelreminder", "rmremind"],
-        native_menu=False
+        native_menu=True
     ),
     CommandInfo(
         name="set_timezone",
@@ -575,7 +575,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/habit [name]",
         description="Daily habit streak logger & tracker",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
+        native_menu=False,
         menu_description="🎯 Daily habit streak tracker"
     ),
     CommandInfo(
@@ -584,7 +584,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="World clock & timezone converter",
         category="⏱️ Reminders & Productivity",
         aliases=["timezone"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🕒 World clock & timezone converter"
     ),
     CommandInfo(
@@ -592,7 +592,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/countdown <date>",
         description="Event countdown tracker",
         category="⏱️ Reminders & Productivity",
-        native_menu=True,
+        native_menu=False,
         menu_description="⏳ Event countdown timer"
     ),
     CommandInfo(
@@ -676,7 +676,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Live high-res website screenshot capture",
         category="💻 Developer & MCP Tools",
         aliases=["webshot", "capture"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📸 Live website screenshot"
     ),
     CommandInfo(
@@ -716,7 +716,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/dns <domain>",
         description="DNS records (A, MX, NS, TXT) lookup",
         category="💻 Developer & MCP Tools",
-        native_menu=True,
+        native_menu=False,
         menu_description="🌐 DNS records lookup"
     ),
     CommandInfo(
@@ -739,7 +739,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/json <text>",
         description="Format, minify & validate JSON",
         category="💻 Developer & MCP Tools",
-        native_menu=True,
+        native_menu=False,
         menu_description="🔧 Format & validate JSON"
     ),
     CommandInfo(
@@ -747,7 +747,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/ip [ip_address]",
         description="Geo-IP location, ISP & ASN lookup",
         category="💻 Developer & MCP Tools",
-        native_menu=True,
+        native_menu=False,
         menu_description="🌐 Geo-IP location lookup"
     ),
 
@@ -758,7 +758,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Professional ATS Resume generator (.pdf)",
         category="📁 Documents, Resumes & Formats",
         aliases=["cv", "buildresume"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📄 ATS Resume PDF generator"
     ),
     CommandInfo(
@@ -767,7 +767,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Formal Job Application Cover Letter (.pdf)",
         category="📁 Documents, Resumes & Formats",
         aliases=["cl"],
-        native_menu=True,
+        native_menu=False,
         menu_description="✉️ Job Cover Letter PDF"
     ),
     CommandInfo(
@@ -776,7 +776,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Receipt / bill parser to structured Excel (.xlsx)",
         category="📁 Documents, Resumes & Formats",
         aliases=["billtoexcel"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📊 Receipt & Bill OCR to Excel"
     ),
     CommandInfo(
@@ -785,7 +785,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Convert image/doc format (PNG, JPG, WebP, PDF, TXT, Word)",
         category="📁 Documents, Resumes & Formats",
         aliases=["format"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🔄 Image & document converter"
     ),
     CommandInfo(
@@ -793,7 +793,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/pdf <title>",
         description="Styled PDF document engine",
         category="📁 Documents, Resumes & Formats",
-        native_menu=True,
+        native_menu=False,
         menu_description="📄 Generate styled PDF document"
     ),
     CommandInfo(
@@ -801,7 +801,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/excel <title>",
         description="Styled Excel spreadsheet engine",
         category="📁 Documents, Resumes & Formats",
-        native_menu=True,
+        native_menu=False,
         menu_description="📊 Generate Excel spreadsheet"
     ),
     CommandInfo(
@@ -809,7 +809,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/doc <title>",
         description="Styled Word (.docx) memo engine",
         category="📁 Documents, Resumes & Formats",
-        native_menu=True,
+        native_menu=False,
         menu_description="📝 Generate Word (.docx) memo"
     ),
     CommandInfo(
@@ -817,7 +817,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/gmail [query]",
         description="Live Gmail messages reader",
         category="📁 Documents, Resumes & Formats",
-        native_menu=True,
+        native_menu=False,
         menu_description="✉️ Read Gmail messages"
     ),
     CommandInfo(
@@ -832,7 +832,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/drive [query]",
         description="Google Drive search",
         category="📁 Documents, Resumes & Formats",
-        native_menu=True,
+        native_menu=False,
         menu_description="📁 Google Drive file search"
     ),
     CommandInfo(
@@ -840,7 +840,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/calendar",
         description="Google Calendar schedule",
         category="📁 Documents, Resumes & Formats",
-        native_menu=True,
+        native_menu=False,
         menu_description="📅 Google Calendar schedule"
     ),
 
@@ -873,7 +873,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/shorten <url>",
         description="Create short TinyURL link",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
+        native_menu=False,
         menu_description="🔗 Shorten URL with TinyURL"
     ),
     CommandInfo(
@@ -882,7 +882,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Disposable temporary email inbox generator",
         category="🔐 Privacy, Security & Web APIs",
         aliases=["disposable"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📬 Temporary disposable email"
     ),
     CommandInfo(
@@ -920,7 +920,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/currency <amt> <from> <to>",
         description="Currency exchange conversion",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
+        native_menu=False,
         menu_description="💱 Currency exchange conversion"
     ),
     CommandInfo(
@@ -928,7 +928,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/crypto [coin]",
         description="Live crypto prices & tickers (BTC/ETH/SOL)",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
+        native_menu=False,
         menu_description="🪙 Live crypto prices (BTC/ETH/SOL)"
     ),
     CommandInfo(
@@ -953,7 +953,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Wikipedia encyclopedia search",
         category="🔐 Privacy, Security & Web APIs",
         aliases=["wikipedia"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📚 Wikipedia encyclopedia search"
     ),
     CommandInfo(
@@ -962,7 +962,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Movie & TV ratings and plot (OMDb/TMDB)",
         category="🔐 Privacy, Security & Web APIs",
         aliases=["tv"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🎬 Movie/TV IMDb ratings & plot"
     ),
     CommandInfo(
@@ -994,7 +994,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Random clean joke & inspirational quote",
         category="🔐 Privacy, Security & Web APIs",
         aliases=["quote"],
-        native_menu=True,
+        native_menu=False,
         menu_description="😄 Clean joke & inspirational quote"
     ),
     CommandInfo(
@@ -1002,7 +1002,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/math <expression>",
         description="WolframAlpha & SymPy solver",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
+        native_menu=False,
         menu_description="🔢 WolframAlpha & SymPy solver"
     ),
     CommandInfo(
@@ -1024,7 +1024,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/shop <product>",
         description="Product & barcode lookup",
         category="🔐 Privacy, Security & Web APIs",
-        native_menu=True,
+        native_menu=False,
         menu_description="🛒 Product & barcode lookup"
     ),
 
@@ -1034,7 +1034,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/sip <monthly> <rate> <years>",
         description="Mutual Fund SIP wealth compounding calculator",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="📈 Mutual Fund SIP calculator"
     ),
     CommandInfo(
@@ -1042,7 +1042,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/emi <loan> <rate> <years>",
         description="Loan EMI, interest & amortization calculator",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="🏦 Loan EMI calculator"
     ),
     CommandInfo(
@@ -1050,7 +1050,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/split <amount> <people>",
         description="Restaurant bill & tip splitter",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="🧾 Bill & tip splitter"
     ),
     CommandInfo(
@@ -1058,7 +1058,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/expense <amt> <cat> <desc>",
         description="Log expense with category analytics",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="💰 Log expense with category"
     ),
     CommandInfo(
@@ -1073,7 +1073,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/bill <name> <due> [amt]",
         description="Add bill reminder alert",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="⏰ Bill reminder alert"
     ),
     CommandInfo(
@@ -1081,7 +1081,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/bmi <weight> <height>",
         description="Body Mass Index & health category",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="⚖️ Body Mass Index calculator"
     ),
     CommandInfo(
@@ -1090,7 +1090,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Nutrition, protein, carbs & calorie profile",
         category="💰 Financial, Health & Lifestyle",
         aliases=["nutrition"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🥗 Nutrition & calorie profile"
     ),
     CommandInfo(
@@ -1098,7 +1098,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/water [ml]",
         description="Water hydration logging",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="💧 Water hydration logger"
     ),
     CommandInfo(
@@ -1107,7 +1107,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Grammar, tone polish & rewriter",
         category="💰 Financial, Health & Lifestyle",
         aliases=["fix"],
-        native_menu=True,
+        native_menu=False,
         menu_description="✍️ Grammar & tone rewriter"
     ),
     CommandInfo(
@@ -1115,7 +1115,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/email <topic>",
         description="Formal business & leave email drafter",
         category="💰 Financial, Health & Lifestyle",
-        native_menu=True,
+        native_menu=False,
         menu_description="📧 Professional email drafter"
     ),
     CommandInfo(
@@ -1124,7 +1124,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Thesaurus, synonyms & antonyms",
         category="💰 Financial, Health & Lifestyle",
         aliases=["thesaurus"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📖 Thesaurus & synonyms"
     ),
 
@@ -1143,7 +1143,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/barcode <number>",
         description="Generate Code128 barcode image",
         category="🎮 Entertainment & Media",
-        native_menu=True,
+        native_menu=False,
         menu_description="📊 Generate Barcode image"
     ),
     CommandInfo(
@@ -1151,7 +1151,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/meme <top> | <bottom>",
         description="Custom meme image generator",
         category="🎮 Entertainment & Media",
-        native_menu=True,
+        native_menu=False,
         menu_description="🎭 Custom meme generator"
     ),
     CommandInfo(
@@ -1159,7 +1159,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/anime <title>",
         description="MyAnimeList anime & manga ratings",
         category="🎮 Entertainment & Media",
-        native_menu=True,
+        native_menu=False,
         menu_description="🌸 Anime & manga ratings"
     ),
     CommandInfo(
@@ -1168,7 +1168,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Cooking ingredients & instructions",
         category="🎮 Entertainment & Media",
         aliases=["cook"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🍳 Cooking recipes & guide"
     ),
     CommandInfo(
@@ -1176,7 +1176,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/riddle",
         description="Fun brain teaser riddles",
         category="🎮 Entertainment & Media",
-        native_menu=True,
+        native_menu=False,
         menu_description="🧩 Brain teaser riddles"
     ),
     CommandInfo(
@@ -1185,7 +1185,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Random decision maker, /dice, /coinflip",
         category="🎮 Entertainment & Media",
         aliases=["dice", "roll", "coinflip", "flip"],
-        native_menu=True,
+        native_menu=False,
         menu_description="🎲 Random decision /dice /coinflip"
     ),
     CommandInfo(
@@ -1194,7 +1194,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="YouTube video transcript & executive summary",
         category="🎮 Entertainment & Media",
         aliases=["yt"],
-        native_menu=True,
+        native_menu=False,
         menu_description="▶️ YouTube transcript & summary"
     ),
     CommandInfo(
@@ -1203,7 +1203,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         description="Webpage / article instant markdown summary",
         category="🎮 Entertainment & Media",
         aliases=["article", "webpage"],
-        native_menu=True,
+        native_menu=False,
         menu_description="📄 Webpage & article summary"
     ),
     CommandInfo(
@@ -1268,9 +1268,12 @@ def get_all_commands() -> List[CommandInfo]:
 
 def generate_help_text(user_id: Optional[str] = None) -> str:
     """
-    Dynamically generates structured categorized markdown for /help, /menu, /commands.
-    Admin-only commands are shown only to administrators (user_id=None shows all,
-    which is used by tests/legacy callers).
+    Concise, grouped /help for users.
+    Tier 1: curated main commands (same set as the native [/] menu), with descriptions.
+    Tier 2: every other non-admin command as a compact one-line-per-category list,
+            so nothing is hidden — just not noisy.
+    Admin-only commands are appended only for administrators (user_id=None shows all,
+    used by tests/legacy callers).
     """
     show_admin = True
     if user_id is not None:
@@ -1280,23 +1283,41 @@ def generate_help_text(user_id: Optional[str] = None) -> str:
         except Exception:
             show_admin = False
 
-    categories: Dict[str, List[CommandInfo]] = {}
+    primary: List[CommandInfo] = []
+    secondary: Dict[str, List[CommandInfo]] = {}
+    admin_cmds: List[CommandInfo] = []
+
     for cmd in COMMAND_REGISTRY:
         if not cmd.enabled:
             continue
-        if cmd.admin_only and not show_admin:
-            continue
-        categories.setdefault(cmd.category, []).append(cmd)
+        if cmd.admin_only:
+            if show_admin:
+                admin_cmds.append(cmd)
+        elif cmd.native_menu:
+            primary.append(cmd)
+        else:
+            secondary.setdefault(cmd.category, []).append(cmd)
 
     lines = ["✨ **Alya AI Assistant (@Alya_Rasa_Bot) — Slash Commands Menu** ✨\n"]
 
-    for cat_name, cmds in categories.items():
-        lines.append(f"**{cat_name}:**")
-        for cmd in cmds:
+    lines.append("**⭐ Main Commands:**")
+    for cmd in primary:
+        lines.append(f"• `{cmd.syntax}` — {cmd.description}")
+    lines.append("")
+
+    if secondary:
+        lines.append("**📚 More Skills** _(type any to use):_")
+        for cat_name, cmds in secondary.items():
+            lines.append(f"• {cat_name}: " + " · ".join(f"`/{c.name}`" for c in cmds))
+        lines.append("")
+
+    if admin_cmds:
+        lines.append("**👥 Admin & Management:**")
+        for cmd in admin_cmds:
             lines.append(f"• `{cmd.syntax}` — {cmd.description}")
         lines.append("")
 
-    lines.append("💡 _Tip: You can tap the **[/] Menu** button next to your text bar to auto-complete any command!_")
+    lines.append("💡 _Tip: Tap the **[/] Menu** button for quick access, or `/skills` for the full directory._")
     return "\n".join(lines).strip()
 
 

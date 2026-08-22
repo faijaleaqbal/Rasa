@@ -69,7 +69,9 @@ class TestCommandRegistry(unittest.TestCase):
         """Verify native Telegram commands meet all API constraints."""
         bot_cmds = reg.get_native_bot_commands()
         self.assertLessEqual(len(bot_cmds), 100)
-        self.assertGreaterEqual(len(bot_cmds), 50)
+        # Curated production menu: small, high-value set only (was 98, reduced to ~26).
+        self.assertGreaterEqual(len(bot_cmds), 25)
+        self.assertLessEqual(len(bot_cmds), 35)
 
         # 'help' must always be present
         cmd_names = [c["command"] for c in bot_cmds]
