@@ -27,11 +27,12 @@ from . import skills_content as content
 from . import skills_developer_tools as dev
 from . import skills_converters_resume as conv
 from . import skills_mobile_device as mob
-from . import skills_android_controller as android
+from . import skills_imei_device as imei_dev
 from . import skills_advanced as adv
 from . import skills_super_pack as superpack
 from . import security_guardrails as security
 from . import mcp_client as mcp
+from . import jobs_service as js
 
 logger = logging.getLogger(__name__)
 
@@ -1161,126 +1162,78 @@ LLM_TOOLS_SPEC = [
     {
         "type": "function",
         "function": {
-            "name": "find_and_ring_phone",
-            "description": "Sound a high-priority loud alarm on user's phone to help locate it.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_whatsapp_dispatch",
-            "description": "Prepare a direct WhatsApp message link and dispatch to mobile phone.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "phone_number": {"type": "string", "description": "Recipient phone number with country code, e.g. +919876543210"},
-                    "message": {"type": "string", "description": "Message text to send"}
-                },
-                "required": ["phone_number", "message"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "get_full_skills_directory",
-            "description": "List all 95+ available skills and command triggers in the AI assistant.",
+            "description": "List all available skills and command triggers in the AI assistant.",
             "parameters": {"type": "object", "properties": {}}
         }
     },
     {
         "type": "function",
         "function": {
-            "name": "make_phone_call",
-            "description": "Initiate an outgoing phone call on user's Android smartphone.",
-            "parameters": {
-                "type": "object",
-                "properties": {"phone_number": {"type": "string", "description": "Phone number with country code"}},
-                "required": ["phone_number"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "send_phone_sms",
-            "description": "Send an SMS text message directly from user's Android SIM card.",
+            "name": "analyze_imei_device",
+            "description": "Perform full 15-digit IMEI analysis on mobile phones (iPhone, Android, Tablets). Extracts make/model, GSMA TAC, Luhn validity, 5G/4G network bands, and Blacklist/CEIR India status.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "phone_number": {"type": "string", "description": "Recipient phone number"},
-                    "message": {"type": "string", "description": "SMS text content"}
+                    "imei": {"type": "string", "description": "15-digit IMEI number (e.g. 352011112345678)"}
                 },
-                "required": ["phone_number", "message"]
+                "required": ["imei"]
             }
         }
     },
     {
         "type": "function",
         "function": {
-            "name": "read_recent_phone_sms",
-            "description": "Read recent incoming SMS text messages from user's Android inbox.",
-            "parameters": {
-                "type": "object",
-                "properties": {"limit": {"type": "integer", "description": "Number of recent SMS to read, default 5"}}
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "set_phone_alarm",
-            "description": "Set a system alarm on user's Android phone clock app.",
+            "name": "decode_device_serial",
+            "description": "Decode Apple, Samsung, and Android hardware serial numbers to decipher factory origin, manufacture year/month, and model verification.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "time_str": {"type": "string", "description": "Alarm time, e.g. '07:30 AM', '6:00'"},
-                    "label": {"type": "string", "description": "Alarm label/title"}
+                    "serial_number": {"type": "string", "description": "Device serial number"},
+                    "brand": {"type": "string", "description": "Optional brand hint, e.g. 'Apple', 'Samsung'"}
                 },
-                "required": ["time_str"]
+                "required": ["serial_number"]
             }
         }
     },
     {
         "type": "function",
         "function": {
-            "name": "set_phone_timer",
-            "description": "Set a countdown timer on user's Android phone clock.",
+            "name": "decode_apple_model",
+            "description": "Decodes Apple iPhone/iPad Part and Model numbers (e.g. MQ023HN/A, A2849) to identify Brand New vs Refurbished vs Replacement status and country/region.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "duration_str": {"type": "string", "description": "Duration, e.g. '5 minutes', '30 seconds'"},
-                    "label": {"type": "string", "description": "Timer label"}
+                    "model_number": {"type": "string", "description": "Apple model/part number (e.g. MQ023HN/A)"}
                 },
-                "required": ["duration_str"]
+                "required": ["model_number"]
             }
         }
     },
     {
         "type": "function",
         "function": {
-            "name": "open_file_or_app_on_phone",
-            "description": "Open a local file (PDF, doc) or launch an application on Android phone.",
-            "parameters": {
-                "type": "object",
-                "properties": {"target": {"type": "string", "description": "App name (e.g. WhatsApp, YouTube) or file path"}},
-                "required": ["target"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "screen_incoming_call_message",
-            "description": "Screen and handle missed or incoming phone calls by taking message and generating AI verbal response.",
+            "name": "lookup_mac_address",
+            "description": "Look up MAC address IEEE OUI vendor and check if the MAC is randomized/private or hardware burned-in.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "caller_number": {"type": "string", "description": "Phone number of caller"},
-                    "caller_statement": {"type": "string", "description": "What caller said or wanted"}
+                    "mac_address": {"type": "string", "description": "MAC address (e.g. 00:03:93:11:22:33)"}
                 },
-                "required": ["caller_statement"]
+                "required": ["mac_address"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ceir_blocking_guide",
+            "description": "Get official Indian DoT Sanchar Saathi & CEIR portal stolen phone blocking, police report, and tracing procedure.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "imei": {"type": "string", "description": "Optional 15-digit IMEI of the stolen device"}
+                }
             }
         }
     },
@@ -1641,28 +1594,23 @@ def execute_tool_call(tool_name: str, args: Dict[str, Any], user_id: str, chat_i
             if res_v.get("file_path") and chat_id:
                 docs.send_telegram_file(chat_id, res_v["file_path"], caption=res_v.get("text", "🎙️ Voice Message"), file_type="voice")
             return res_v.get("text", "Voice generated.")
-        elif tool_name == "send_phone_push_notification":
-            return mob.send_phone_push_notification(args.get("title", "Alya Alert"), args.get("message", ""), args.get("priority", "high"))
-        elif tool_name == "find_and_ring_phone":
-            return mob.find_and_ring_phone(user_id)
-        elif tool_name == "create_whatsapp_dispatch":
-            return mob.create_whatsapp_dispatch(args.get("phone_number", ""), args.get("message", ""))
         elif tool_name == "get_full_skills_directory":
             return mob.get_full_skills_directory()
-        elif tool_name == "make_phone_call":
-            return android.make_phone_call(args.get("phone_number", ""))
-        elif tool_name == "send_phone_sms":
-            return android.send_phone_sms(args.get("phone_number", ""), args.get("message", ""))
-        elif tool_name == "read_recent_phone_sms":
-            return android.read_recent_phone_sms(int(args.get("limit", 5)))
-        elif tool_name == "set_phone_alarm":
-            return android.set_phone_alarm(args.get("time_str", "07:00 AM"), args.get("label", "Alya Alarm"))
-        elif tool_name == "set_phone_timer":
-            return android.set_phone_timer(args.get("duration_str", "5 minutes"), args.get("label", "Timer"))
-        elif tool_name == "open_file_or_app_on_phone":
-            return android.open_file_or_app_on_phone(args.get("target", "WhatsApp"))
-        elif tool_name == "screen_incoming_call_message":
-            return android.screen_incoming_call_message(args.get("caller_number", "Unknown"), args.get("caller_statement", ""))
+        elif tool_name == "analyze_imei_device":
+            res_im = imei_dev.analyze_imei(args.get("imei", ""))
+            return res_im.get("text", res_im.get("error", "IMEI analysis failed."))
+        elif tool_name == "decode_device_serial":
+            res_sn = imei_dev.decode_serial_number(args.get("serial_number", ""), args.get("brand"))
+            return res_sn.get("text", res_sn.get("error", "Serial decoding failed."))
+        elif tool_name == "decode_apple_model":
+            res_m = imei_dev.decode_apple_model_number(args.get("model_number", ""))
+            return res_m.get("text", res_m.get("error", "Model decoding failed."))
+        elif tool_name == "lookup_mac_address":
+            res_mac = imei_dev.lookup_mac_oui(args.get("mac_address", ""))
+            return res_mac.get("text", res_mac.get("error", "MAC lookup failed."))
+        elif tool_name == "get_ceir_blocking_guide":
+            res_ceir = imei_dev.generate_ceir_blocking_guide(args.get("imei"))
+            return res_ceir.get("text", "CEIR guide generated.")
         elif tool_name == "generate_upi_qr":
             res_u = adv.generate_upi_qr(
                 vpa=args.get("vpa", ""),
@@ -1964,7 +1912,11 @@ class ActionServerHealth(Action):
         return "action_server_health"
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        res = utils.get_server_system_health()
+        user_msg = tracker.latest_message.get("text", "").strip().lower()
+        if user_msg.startswith(("/status", "/scraperstatus", "/jobstatus")) or "scraper" in user_msg:
+            res = js.get_status_text(db, str(tracker.sender_id))
+        else:
+            res = utils.get_server_system_health()
         dispatcher.utter_message(text=res)
         return []
 
@@ -2008,3 +1960,91 @@ class ActionListNotes(Action):
         res = utils.search_user_notes(str(tracker.sender_id))
         dispatcher.utter_message(text=res)
         return []
+
+
+# -------------------------------------------------------------
+# Jobs & Scholarships Rasa Actions
+# -------------------------------------------------------------
+
+class ActionGetJobs(Action):
+    def name(self) -> Text:
+        return "action_get_jobs"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        sender_id = str(tracker.sender_id)
+        res = js.get_latest_jobs_text(db, user_id=sender_id, limit=5)
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionGetScholarships(Action):
+    def name(self) -> Text:
+        return "action_get_scholarships"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        sender_id = str(tracker.sender_id)
+        res = js.get_latest_scholarships_text(db, user_id=sender_id, limit=5)
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionGetPsuJobs(Action):
+    def name(self) -> Text:
+        return "action_get_psu_jobs"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        sender_id = str(tracker.sender_id)
+        res = js.get_latest_psu_text(db, user_id=sender_id, limit=5)
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionSearchVacancies(Action):
+    def name(self) -> Text:
+        return "action_search_vacancies"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        user_msg = tracker.latest_message.get("text", "").strip()
+        # Clean slash command if present
+        clean_query = re.sub(r"^/search\s*", "", user_msg, flags=re.IGNORECASE).strip()
+        if not clean_query:
+            clean_query = user_msg
+        res = js.search_vacancies_text(db, clean_query)
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionSubscribeAlerts(Action):
+    def name(self) -> Text:
+        return "action_subscribe_alerts"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        sender_id = str(tracker.sender_id)
+        res = js.subscribe_user(db, sender_id)
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionUnsubscribeAlerts(Action):
+    def name(self) -> Text:
+        return "action_unsubscribe_alerts"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        sender_id = str(tracker.sender_id)
+        res = js.unsubscribe_user(db, sender_id)
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionSetAlertFormat(Action):
+    def name(self) -> Text:
+        return "action_set_alert_format"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        sender_id = str(tracker.sender_id)
+        user_msg = tracker.latest_message.get("text", "").lower()
+        fmt = "full" if "full" in user_msg else "short"
+        res = js.set_user_format_pref(db, sender_id, fmt)
+        dispatcher.utter_message(text=res)
+        return []
+

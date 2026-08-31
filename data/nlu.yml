@@ -293,3 +293,106 @@ nlu:
     - saved notes search
     - fetch my notes
     - view notes
+
+- intent: ask_jobs
+  examples: |
+    - /jobs
+    - /wbjobs
+    - /govtjobs
+    - /sarkarijobs
+    - latest government jobs
+    - west bengal govt jobs
+    - central govt jobs
+    - sarkari naukri update
+    - show latest jobs
+    - wb jobs batao
+    - govt vacancy updates
+    - new job notifications
+    - latest vacancies
+    - sarkari result jobs
+
+- intent: ask_scholarships
+  examples: |
+    - /scholarships
+    - /scholarship
+    - /nsp
+    - /aikyashree
+    - latest scholarships
+    - open scholarship schemes
+    - national scholarship portal updates
+    - aikyashree scholarship status
+    - scholarship batao
+    - student scholarships list
+    - show available scholarships
+    - fellowship and grants
+
+- intent: ask_psu_jobs
+  examples: |
+    - /psu
+    - /psujobs
+    - /psucareers
+    - latest psu jobs
+    - psu recruitment notifications
+    - sail ongc ntpc coal india jobs
+    - maharatna psu vacancies
+    - psu vacancy batao
+    - public sector jobs
+    - psu careers
+
+- intent: search_vacancies
+  examples: |
+    - /search WBPSC
+    - /search SSC
+    - /search NSP
+    - /search SAIL
+    - /search Aadhaar Supervisor
+    - /search Police Constable
+    - search job vacancy
+    - find scholarship scheme
+    - vacancy search
+    - search jobs
+
+- intent: subscribe_alerts
+  examples: |
+    - subscribe to job alerts
+    - alert notifications on karo
+    - job alerts subscribe
+    - enable scholarship notifications
+    - start job alerts
+
+- intent: unsubscribe_alerts
+  examples: |
+    - /stop
+    - /unsub
+    - /unsubscribe
+    - stop job alerts
+    - unsubscribe alerts
+    - disable notifications
+    - band karo job alerts
+    - stop alerts
+
+- intent: set_alert_format
+  examples: |
+    - /format full
+    - /format short
+    - set alert format to full
+    - format short karo
+    - notification format full
+    - change alert format
+
+- intent: ask_help
+  examples: |
+    - /help
+    - /start
+    - /menu
+    - /commands
+    - /allcommands
+    - /skills
+    - /directory
+    - help
+    - commands list
+    - kya kya kar sakti ho
+    - show all commands
+    - help menu dikhao
+
+

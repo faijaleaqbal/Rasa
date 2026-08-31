@@ -52,6 +52,46 @@ rules:
   - intent: list_notes
   - action: action_list_notes
 
+- rule: Handle jobs query directly
+  steps:
+  - intent: ask_jobs
+  - action: action_get_jobs
+
+- rule: Handle scholarships query directly
+  steps:
+  - intent: ask_scholarships
+  - action: action_get_scholarships
+
+- rule: Handle psu jobs query directly
+  steps:
+  - intent: ask_psu_jobs
+  - action: action_get_psu_jobs
+
+- rule: Handle search vacancies directly
+  steps:
+  - intent: search_vacancies
+  - action: action_search_vacancies
+
+- rule: Handle subscribe alerts directly
+  steps:
+  - intent: subscribe_alerts
+  - action: action_subscribe_alerts
+
+- rule: Handle unsubscribe alerts directly
+  steps:
+  - intent: unsubscribe_alerts
+  - action: action_unsubscribe_alerts
+
+- rule: Handle set alert format directly
+  steps:
+  - intent: set_alert_format
+  - action: action_set_alert_format
+
+- rule: Handle help query directly
+  steps:
+  - intent: ask_help
+  - action: action_llm_response
+
 - rule: Fallback routing to LLM response
   steps:
   - intent: nlu_fallback

@@ -92,12 +92,12 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         menu_description="🎓 AI Question & Exam Problem Solver"
     ),
     CommandInfo(
-        name="search",
-        syntax="/search <query>",
+        name="websearch",
+        syntax="/websearch <query>",
         description="Real-time live AI Web Search & Synthesis (Tavily & DDG)",
         category="🤖 AI & Super-Skills",
-        aliases=["google", "websearch"],
-        native_menu=True,
+        aliases=["google"],
+        native_menu=False,
         menu_description="🔍 Real-time live AI Web Search"
     ),
     CommandInfo(
@@ -239,113 +239,69 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         native_menu=False
     ),
 
-    # 📱 Mobile & Android Automation
-    CommandInfo(
-        name="call",
-        syntax="/call <number>",
-        description="Direct phone call dialer",
-        category="📱 Mobile & Android Automation",
-        aliases=["dial", "phonecall"],
-        native_menu=False,
-        menu_description="📞 Make phone call dialer"
-    ),
-    CommandInfo(
-        name="sms",
-        syntax="/sms <number> <msg>",
-        description="Send SMS text message from phone",
-        category="📱 Mobile & Android Automation",
-        aliases=["sendtext"],
-        native_menu=False,
-        menu_description="💬 Send SMS text message"
-    ),
-    CommandInfo(
-        name="readsms",
-        syntax="/readsms [limit]",
-        description="Read incoming SMS messages from phone inbox",
-        category="📱 Mobile & Android Automation",
-        aliases=["inboxsms"],
-        native_menu=False,
-        menu_description="📩 Read incoming SMS messages"
-    ),
-    CommandInfo(
-        name="alarm",
-        syntax="/alarm <time> [label]",
-        description="Set phone alarm",
-        category="📱 Mobile & Android Automation",
-        aliases=["setalarm"],
-        native_menu=False,
-        menu_description="⏰ Set phone alarm"
-    ),
-    CommandInfo(
-        name="timer",
-        syntax="/timer <duration> [label]",
-        description="Set countdown timer on phone",
-        category="📱 Mobile & Android Automation",
-        aliases=["settimer"],
-        native_menu=False,
-        menu_description="⏳ Set countdown timer on phone"
-    ),
-    CommandInfo(
-        name="open",
-        syntax="/open <app_or_file>",
-        description="Launch application or open file on phone",
-        category="📱 Mobile & Android Automation",
-        aliases=["launch", "app"],
-        native_menu=False,
-        menu_description="📱 Launch phone app or open file"
-    ),
-    CommandInfo(
-        name="callscreen",
-        syntax="/callscreen <statement>",
-        description="AI call screening & voicemail assistant",
-        category="📱 Mobile & Android Automation",
-        aliases=["screen", "voicemail"],
-        native_menu=False
-    ),
-    CommandInfo(
-        name="findmyphone",
-        syntax="/findmyphone",
-        description="Sound loud emergency alarm to locate your phone",
-        category="📱 Mobile & Android Automation",
-        aliases=["ringphone", "ring"],
-        native_menu=True,
-        menu_description="🔔 Ring phone loudly to locate it"
-    ),
-    CommandInfo(
-        name="clip",
-        syntax="/clip <text>",
-        description="Sync text directly into phone clipboard",
-        category="📱 Mobile & Android Automation",
-        aliases=["copy"],
-        native_menu=False,
-        menu_description="📋 Sync text to phone clipboard"
-    ),
-    CommandInfo(
-        name="whatsapp",
-        syntax="/whatsapp <phone> <msg>",
-        description="Direct WhatsApp message & link dispatch",
-        category="📱 Mobile & Android Automation",
-        aliases=["wa"],
-        native_menu=False,
-        menu_description="💬 Send WhatsApp message"
-    ),
-    CommandInfo(
-        name="notify",
-        syntax="/notify <title> | <msg>",
-        description="Instant native push alert on phone lock screen",
-        category="📱 Mobile & Android Automation",
-        aliases=["alert", "push"],
-        native_menu=False,
-        menu_description="📲 Push alert to phone lockscreen"
-    ),
     CommandInfo(
         name="skills",
         syntax="/skills",
         description="Full interactive skills directory catalog",
-        category="📱 Mobile & Android Automation",
+        category="⭐ Main Commands",
         aliases=["directory", "allskills"],
         native_menu=True,
         menu_description="🌟 Full interactive skills catalog"
+    ),
+
+    # 📱 Mobile & Device Diagnostics
+    CommandInfo(
+        name="imei",
+        syntax="/imei <15_digit_imei_number> [imei2]",
+        description="Comprehensive Mobile IMEI specs, brand/model, GSMA TAC breakdown & Blacklist/CEIR status (Supports Dual-SIM)",
+        category="📱 Mobile & Device Diagnostics",
+        aliases=["checkimei", "imeicheck", "imeiinfo", "dualimei"],
+        native_menu=True,
+        menu_description="📱 Full IMEI Specs & Blacklist Check"
+    ),
+    CommandInfo(
+        name="serial",
+        syntax="/serial <serial_number> [brand]",
+        description="Apple, Samsung & Android device serial number decoder (Plant origin, manufacture date & warranty)",
+        category="📱 Mobile & Device Diagnostics",
+        aliases=["sn", "serialnumber", "checkserial"],
+        native_menu=True,
+        menu_description="🔍 Decode Device Serial Number & Plant Specs"
+    ),
+    CommandInfo(
+        name="model",
+        syntax="/model <apple_part_number>",
+        description="Apple iPhone/iPad Part & Model decoder (Brand New / Refurbished / Replacement & Country Region)",
+        category="📱 Mobile & Device Diagnostics",
+        aliases=["partno", "applemodel", "checkmodel"],
+        native_menu=True,
+        menu_description="🍏 Apple Model, Condition & Region Decoder"
+    ),
+    CommandInfo(
+        name="mac",
+        syntax="/mac <mac_address>",
+        description="MAC Address IEEE OUI hardware vendor lookup & randomized privacy chip analysis",
+        category="📱 Mobile & Device Diagnostics",
+        aliases=["oui", "macaddress", "maclookup"],
+        native_menu=False
+    ),
+    CommandInfo(
+        name="ceir",
+        syntax="/ceir [imei]",
+        description="Official DoT Sanchar Saathi & CEIR Stolen phone pan-India blocking & tracing guide",
+        category="📱 Mobile & Device Diagnostics",
+        aliases=["blockphone", "lostphone", "stolenphone"],
+        native_menu=True,
+        menu_description="🚨 Block Stolen Phone (CEIR Portal Guide)"
+    ),
+    CommandInfo(
+        name="scanimei",
+        syntax="/scanimei [image_url_or_photo]",
+        description="Auto-Scan phone box barcode / *#06# photo via OCR to extract IMEI & Serial numbers",
+        category="📱 Mobile & Device Diagnostics",
+        aliases=["imeiscan", "boxscan", "scanbox"],
+        native_menu=True,
+        menu_description="📸 Auto-Scan IMEI & Serial from Box Photo"
     ),
 
     # 🇮🇳 Indian Utilities & Markets
@@ -701,7 +657,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/serverstatus",
         description="EC2 CPU, RAM, Disk health",
         category="💻 Developer & MCP Tools",
-        aliases=["health", "status"],
+        aliases=["health", "ec2status"],
         native_menu=False
     ),
     CommandInfo(
@@ -784,7 +740,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/convert <format> <file>",
         description="Convert image/doc format (PNG, JPG, WebP, PDF, TXT, Word)",
         category="📁 Documents, Resumes & Formats",
-        aliases=["format"],
+        aliases=["fileconvert"],
         native_menu=False,
         menu_description="🔄 Image & document converter"
     ),
@@ -1244,6 +1200,202 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         admin_only=True,
         native_menu=False
     ),
+    CommandInfo(
+        name="status",
+        syntax="/status",
+        description="(Admin) Scraper health, source runs & vacancy statistics",
+        category="👥 Admin & Management",
+        aliases=["scraperstatus", "jobstatus"],
+        admin_only=True,
+        native_menu=False
+    ),
+
+    # 🎓 Jobs & Scholarships
+    CommandInfo(
+        name="jobs",
+        syntax="/jobs",
+        description="Latest 5 open West Bengal & Central government jobs",
+        category="🎓 Jobs & Scholarships",
+        aliases=["govtjobs", "wbjobs", "sarkarijobs"],
+        native_menu=True,
+        menu_description="💼 Latest WB & Central Govt jobs"
+    ),
+    CommandInfo(
+        name="railway",
+        syntax="/railway",
+        description="Latest Indian Railways vacancies (RRB NTPC, Group D, ALP, Technician, RPF)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["rrb", "rrc", "railwayjobs"],
+        native_menu=True,
+        menu_description="🚂 Indian Railways RRB/RPF jobs"
+    ),
+    CommandInfo(
+        name="bank",
+        syntax="/bank",
+        description="Latest Banking jobs (IBPS PO/Clerk, SBI, RBI, NABARD, Gramin Banks)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["bankjobs", "ibps", "sbi", "banking"],
+        native_menu=True,
+        menu_description="🏦 Banking & IBPS/SBI jobs"
+    ),
+    CommandInfo(
+        name="defence",
+        syntax="/defence",
+        description="Latest Defence, Police & Paramilitary jobs (Army, Navy, IAF, NDA, CAPF, Police)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["police", "army", "navy", "airforce", "paramilitary"],
+        native_menu=True,
+        menu_description="🪖 Defence, Army, Navy & Police jobs"
+    ),
+    CommandInfo(
+        name="teaching",
+        syntax="/teaching",
+        description="Latest Teaching & Academic vacancies (CTET, State TET, KVS, NVS, Professor)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["teacher", "tet", "ctet", "kvs"],
+        native_menu=False
+    ),
+    CommandInfo(
+        name="psu",
+        syntax="/psu",
+        description="Latest 5 open PSU jobs (SAIL, ONGC, NTPC, Coal India)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["psujobs", "psucareers"],
+        native_menu=True,
+        menu_description="🏢 Latest open PSU jobs (#PSU)"
+    ),
+    CommandInfo(
+        name="eligible",
+        syntax="/eligible <qualification>",
+        description="Filter active vacancies matching your degree (e.g. 10th pass, 12th, graduate, btech)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["eligibility", "qualification", "degreejobs"],
+        native_menu=True,
+        menu_description="🎯 Jobs by Qualification (10th/12th/Graduate)"
+    ),
+    CommandInfo(
+        name="admitcard",
+        syntax="/admitcard",
+        description="Latest released Exam Admit Cards, Hall Tickets & City Slips",
+        category="🎓 Jobs & Scholarships",
+        aliases=["admit", "hallticket", "callletter"],
+        native_menu=True,
+        menu_description="🎟️ Latest Exam Admit Cards"
+    ),
+    CommandInfo(
+        name="results",
+        syntax="/results",
+        description="Latest declared Exam Results, Scorecards & Cut-off Marks",
+        category="🎓 Jobs & Scholarships",
+        aliases=["examresults", "result", "sarkariresult"],
+        native_menu=True,
+        menu_description="🏆 Latest Exam Results & Cut-offs"
+    ),
+    CommandInfo(
+        name="answerkey",
+        syntax="/answerkey",
+        description="Latest official Exam Answer Keys & Response Sheet objection trackers",
+        category="🎓 Jobs & Scholarships",
+        aliases=["keys", "responsesheet"],
+        native_menu=False
+    ),
+    CommandInfo(
+        name="scholarships",
+        syntax="/scholarships",
+        description="Latest 5 open national & West Bengal scholarships",
+        category="🎓 Jobs & Scholarships",
+        aliases=["scholarship", "allscholarships"],
+        native_menu=True,
+        menu_description="🎓 Latest open scholarships"
+    ),
+    CommandInfo(
+        name="svmcm",
+        syntax="/svmcm",
+        description="Swami Vivekananda Merit-cum-Means (SVMCM Bikash Bhavan) eligibility & apply guide",
+        category="🎓 Jobs & Scholarships",
+        aliases=["bikashbhavan", "svmcmguide"],
+        native_menu=True,
+        menu_description="🌟 SVMCM Bikash Bhavan Guide"
+    ),
+    CommandInfo(
+        name="aikyashree",
+        syntax="/aikyashree",
+        description="WBMDFC Aikyashree Minority Scholarship (Pre/Post/MCM/TSP) guidelines",
+        category="🎓 Jobs & Scholarships",
+        aliases=["minority", "wbmdfc", "aikyashreeguide"],
+        native_menu=True,
+        menu_description="🕌 Aikyashree Minority Scholarship"
+    ),
+    CommandInfo(
+        name="nsp",
+        syntax="/nsp",
+        description="National Scholarship Portal (NSP Central Government Schemes & OTR info)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["centralscholarship", "nspguide"],
+        native_menu=False
+    ),
+    CommandInfo(
+        name="girlschol",
+        syntax="/girlschol",
+        description="Dedicated scholarships for girls & women in STEM (Kanyashree, Pragati, Begum Hazrat)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["kanyashree", "pragati", "girlscholarships"],
+        native_menu=True,
+        menu_description="👧 Scholarships for Girl Students"
+    ),
+    CommandInfo(
+        name="studyabroad",
+        syntax="/studyabroad",
+        description="Top International Fully Funded Scholarships (Chevening UK, DAAD Germany, Fulbright)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["chevening", "daad", "fulbright", "abroadscholarship"],
+        native_menu=False
+    ),
+    CommandInfo(
+        name="scholeligible",
+        syntax="/scholeligible <class/course> [percentage%] [income]",
+        description="Smart scholarship matcher based on your class, marks percentage and category",
+        category="🎓 Jobs & Scholarships",
+        aliases=["matchscholarship", "scholarshipmatcher"],
+        native_menu=True,
+        menu_description="🤖 Match Scholarships for My Profile"
+    ),
+    CommandInfo(
+        name="scholhelp",
+        syntax="/scholhelp",
+        description="Mandatory document checklist & Bank NPCI Aadhaar Seeding check guide",
+        category="🎓 Jobs & Scholarships",
+        aliases=["npci", "dbt", "scholguide"],
+        native_menu=True,
+        menu_description="📑 Scholarship Documents & NPCI Guide"
+    ),
+    CommandInfo(
+        name="search",
+        syntax="/search <title>",
+        description="Fuzzy search jobs & scholarships from last 20 days",
+        category="🎓 Jobs & Scholarships",
+        aliases=["jobsearch", "findjob"],
+        native_menu=True,
+        menu_description="🔍 Search jobs & scholarships"
+    ),
+    CommandInfo(
+        name="format",
+        syntax="/format <full|short>",
+        description="Set notification format preference (full or short)",
+        category="🎓 Jobs & Scholarships",
+        aliases=["setformat", "alertformat"],
+        native_menu=True,
+        menu_description="⚙️ Alert format preference"
+    ),
+    CommandInfo(
+        name="stop",
+        syntax="/stop",
+        description="Unsubscribe from job & scholarship alerts",
+        category="🎓 Jobs & Scholarships",
+        aliases=["unsub", "unsubscribe"],
+        native_menu=True,
+        menu_description="🛑 Unsubscribe job alerts"
+    ),
 ]
 
 
@@ -1284,6 +1436,7 @@ def generate_help_text(user_id: Optional[str] = None) -> str:
             show_admin = False
 
     primary: List[CommandInfo] = []
+    jobs_cmds: List[CommandInfo] = []
     secondary: Dict[str, List[CommandInfo]] = {}
     admin_cmds: List[CommandInfo] = []
 
@@ -1293,6 +1446,8 @@ def generate_help_text(user_id: Optional[str] = None) -> str:
         if cmd.admin_only:
             if show_admin:
                 admin_cmds.append(cmd)
+        elif cmd.category == "🎓 Jobs & Scholarships":
+            jobs_cmds.append(cmd)
         elif cmd.native_menu:
             primary.append(cmd)
         else:
@@ -1304,6 +1459,12 @@ def generate_help_text(user_id: Optional[str] = None) -> str:
     for cmd in primary:
         lines.append(f"• `{cmd.syntax}` — {cmd.description}")
     lines.append("")
+
+    if jobs_cmds:
+        lines.append("**🎓 Jobs & Scholarships:**")
+        for cmd in jobs_cmds:
+            lines.append(f"• `{cmd.syntax}` — {cmd.description}")
+        lines.append("")
 
     if secondary:
         lines.append("**📚 More Skills** _(type any to use):_")

@@ -54,7 +54,9 @@ REQUIRED_BASELINE_COMMANDS = {
     "/qr", "/barcode", "/meme", "/anime", "/recipe", "/riddle", "/pick", "/dice",
     "/coinflip", "/youtube", "/summarize", "/briefing",
     # Admin & Management
-    "/adduser", "/removeuser", "/users"
+    "/adduser", "/removeuser", "/users",
+    # Jobs & Scholarships
+    "/jobs", "/scholarships", "/psu", "/format", "/stop"
 }
 
 
@@ -84,9 +86,9 @@ class TestCanonicalCommandInventory(unittest.TestCase):
         total_aliases = sum(len(c.aliases) for c in all_cmds)
         total_triggers = total_primary + total_aliases
 
-        self.assertEqual(total_primary, 143, f"Expected 143 canonical primary commands, found {total_primary}")
-        self.assertEqual(total_aliases, 174, f"Expected 174 aliases, found {total_aliases}")
-        self.assertEqual(total_triggers, 317, f"Expected 317 total registry lookup triggers, found {total_triggers}")
+        self.assertEqual(total_primary, 150, f"Expected 150 canonical primary commands, found {total_primary}")
+        self.assertEqual(total_aliases, 189, f"Expected 189 aliases, found {total_aliases}")
+        self.assertEqual(total_triggers, 339, f"Expected 339 total registry lookup triggers, found {total_triggers}")
 
     def test_registry_audit_zero_collisions(self):
         """Verifies registry audit reports zero duplicate commands, collisions, or invalid names."""

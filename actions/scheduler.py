@@ -147,6 +147,26 @@ def _check_and_fire_reminders() -> int:
     return fired_count
 
 
+def _run_scraper_worker():
+    """Executes periodic scraping and Telegram notification dispatch in a background worker."""
+    try:
+        from . import jobs_service as js
+        logger.info("Executing scheduled Job & Scholarship scrape...")
+        js.execute_scheduled_scrape_and_dispatch(db)
+    except Exception as e:
+        logger.error(f"Scheduled scraper execution failed: {e}", exc_info=True)
+
+
+def _run_cleanup_worker():
+    """Executes daily 20-day notification cleanup in a background worker."""
+    try:
+        from . import jobs_service as js
+        logger.info("Executing scheduled 20-day database cleanup...")
+        js.execute_daily_cleanup(db, days=20)
+    except Exception as e:
+        logger.error(f"Scheduled database cleanup failed: {e}", exc_info=True)
+
+
 def _scheduler_loop():
     """Background polling loop executed in a single daemon thread."""
     logger.info("Alya Timezone-Aware Background Scheduler loop started.")
@@ -157,12 +177,42 @@ def _scheduler_loop():
     except Exception as e:
         logger.error(f"Scheduler startup recovery failed: {e}", exc_info=True)
 
+    SCRAPER_INTERVAL_SECONDS = 3 * 60 * 60  # Exactly 3 hours
+    CLEANUP_INTERVAL_SECONDS = 24 * 60 * 60  # 24 hours
+
+    last_scraper_run = 0.0
+    last_cleanup_run = 0.0
+
     while True:
+        now_ts = time.time()
+
+        # 1. Reminders check (every 15s)
         try:
             with _CLAIM_LOCK:
                 _check_and_fire_reminders()
         except Exception as e:
             logger.error(f"Error in scheduler check: {e}", exc_info=True)
+
+        # 2. Scrapers execution & live alert dispatch (every 3 hours, non-blocking)
+        if now_ts - last_scraper_run >= SCRAPER_INTERVAL_SECONDS:
+            last_scraper_run = now_ts
+            t_scraper = threading.Thread(
+                target=_run_scraper_worker,
+                daemon=True,
+                name="AlyaScraperWorker"
+            )
+            t_scraper.start()
+
+        # 3. Database cleanup (once daily, non-blocking)
+        if now_ts - last_cleanup_run >= CLEANUP_INTERVAL_SECONDS:
+            last_cleanup_run = now_ts
+            t_cleanup = threading.Thread(
+                target=_run_cleanup_worker,
+                daemon=True,
+                name="AlyaCleanupWorker"
+            )
+            t_cleanup.start()
+
         time.sleep(15)  # Poll every 15 seconds for responsiveness
 
 

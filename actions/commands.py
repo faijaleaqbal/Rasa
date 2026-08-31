@@ -15,10 +15,11 @@ from . import skills_content as content_skills
 from . import skills_developer_tools as dev
 from . import skills_converters_resume as conv
 from . import skills_mobile_device as mob
-from . import skills_android_controller as android
+from . import skills_imei_device as imei_dev
 from . import skills_advanced as adv
 from . import skills_super_pack as superpack
 from . import mcp_client as mcp
+from . import jobs_service as js
 try:
     from addons.image_tools import slash_bridge as img_bridge
 except ImportError:
@@ -131,6 +132,11 @@ def _dispatch_slash_command(
 
     # 1. /help or /start or /menu
     if cmd in ["/start", "/help", "/commands", "/menu", "/allcommands"]:
+        if cmd == "/start":
+            try:
+                db.subscribe_job_alert_user(str(user_id))
+            except Exception as e:
+                logger.warning(f"Error subscribing user on /start: {e}")
         from . import command_registry as reg
         return {"handled": True, "text": reg.generate_help_text(user_id=str(user_id))}
 
@@ -380,7 +386,7 @@ def _dispatch_slash_command(
         return {"handled": True, "text": utils.list_user_habits(user_id)}
 
     # 30. /serverstatus
-    elif cmd in ["/serverstatus", "/health", "/status"]:
+    elif cmd in ["/serverstatus", "/health", "/ec2status"]:
         return {"handled": True, "text": utils.get_server_system_health()}
 
     # 31. /speedtest
@@ -626,7 +632,7 @@ def _dispatch_slash_command(
         return {"handled": True, "text": ext.lookup_pincode(args_str)}
 
     # 68. /ifsc <code>
-    elif cmd in ["/ifsc", "/bank"]:
+    elif cmd in ["/ifsc", "/bankifsc", "/ifsccode"]:
         return {"handled": True, "text": ext.lookup_ifsc(args_str)}
 
     # 69. /shorten <url>
@@ -654,7 +660,7 @@ def _dispatch_slash_command(
         return {"handled": True, "text": markets.get_train_pnr_status(args_str)}
 
     # 74. /train <train_number_or_name>
-    elif cmd in ["/train", "/railway"]:
+    elif cmd in ["/train", "/trainstatus", "/liveirctc"]:
         return {"handled": True, "text": markets.get_train_live_status(args_str)}
 
     # 75. /flight <flight_code>
@@ -727,7 +733,7 @@ def _dispatch_slash_command(
         return {"handled": True, "text": res_cl.get("error", "⚠️ Cover letter generation failed.")}
 
     # 88. /convert <format>
-    elif cmd in ["/convert", "/format"]:
+    elif cmd == "/convert":
         parts_c = args_str.split(maxsplit=1)
         fmt = parts_c[0] if len(parts_c) > 0 else "png"
         src_path = parts_c[1].strip() if len(parts_c) > 1 else ""
@@ -742,6 +748,24 @@ def _dispatch_slash_command(
             return {"handled": True, "text": res_c.get("text", ""), "file_path": res_c.get("file_path"), "file_type": res_c.get("file_type", "document")}
         return {"handled": True, "text": res_c.get("error", "⚠️ File conversion failed.")}
 
+    # 88b. /format full | short (Job Alert Format Preference)
+    elif cmd in ["/format", "/alertformat", "/setformat"]:
+        parts_f = args_str.split(maxsplit=1)
+        first_token = parts_f[0].lower() if parts_f else ""
+        if first_token in ["full", "short"]:
+            return {"handled": True, "text": js.set_user_format_pref(db, user_id, first_token)}
+        elif len(parts_f) > 1 and (os.path.exists(parts_f[1]) or parts_f[1].startswith("http")):
+            fmt = first_token or "png"
+            src_path = parts_f[1].strip()
+            if src_path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                res_c = conv.convert_image_file(src_path, fmt)
+            else:
+                res_c = conv.convert_document_file(src_path, fmt)
+            if res_c.get("success"):
+                return {"handled": True, "text": res_c.get("text", ""), "file_path": res_c.get("file_path"), "file_type": res_c.get("file_type", "document")}
+            return {"handled": True, "text": res_c.get("error", "⚠️ File conversion failed.")}
+        return {"handled": True, "text": "Usage: `/format full` or `/format short`\n(Default alert notification format is **short**)."}
+
     # 89. /speak <text> or /tts
     elif cmd in ["/speak", "/tts", "/voice"]:
         res_v = mob.generate_voice_speech(args_str, "hi")
@@ -749,72 +773,66 @@ def _dispatch_slash_command(
             return {"handled": True, "text": res_v.get("text", ""), "file_path": res_v.get("file_path"), "file_type": "voice"}
         return {"handled": True, "text": res_v.get("error", "⚠️ Voice speech failed.")}
 
-    # 90. /notify <title> | <message>
-    elif cmd in ["/notify", "/alert", "/push"]:
-        parts_n = args_str.split("|", maxsplit=1)
-        t_n = parts_n[0].strip() if len(parts_n) > 0 else "Alya Alert"
-        m_n = parts_n[1].strip() if len(parts_n) > 1 else args_str
-        return {"handled": True, "text": mob.send_phone_push_notification(t_n, m_n, "high")}
-
-    # 91. /findmyphone or /ringphone
-    elif cmd in ["/findmyphone", "/ringphone", "/ring"]:
-        return {"handled": True, "text": mob.find_and_ring_phone(user_id)}
-
-    # 92. /clip <text> or /copy
-    elif cmd in ["/clip", "/copy"]:
-        return {"handled": True, "text": mob.sync_clipboard_to_phone(args_str)}
-
-    # 93. /whatsapp <number> <message> or /wa
-    elif cmd in ["/whatsapp", "/wa"]:
-        parts_w = args_str.split(maxsplit=1)
-        p_w = parts_w[0] if len(parts_w) > 0 else ""
-        m_w = parts_w[1] if len(parts_w) > 1 else "Hello from Alya!"
-        return {"handled": True, "text": mob.create_whatsapp_dispatch(p_w, m_w)}
-
-    # 94. /skills or /directory
+    # /skills or /directory
     elif cmd in ["/skills", "/directory", "/allskills"]:
         return {"handled": True, "text": mob.get_full_skills_directory()}
 
-    # 95. /call <number>
-    elif cmd in ["/call", "/dial", "/phonecall"]:
-        return {"handled": True, "text": android.make_phone_call(args_str)}
+    # /imei <15_digit_imei>
+    elif cmd in ["/imei", "/checkimei", "/imeicheck", "/imeiinfo"]:
+        res_imei = imei_dev.analyze_imei(args_str)
+        if res_imei.get("success"):
+            return {"handled": True, "text": res_imei.get("text", "")}
+        return {"handled": True, "text": res_imei.get("error", "⚠️ IMEI verification failed.")}
 
-    # 96. /sms <number> <message>
-    elif cmd in ["/sms", "/sendtext"]:
-        parts_s = args_str.split(maxsplit=1)
-        p_s = parts_s[0] if len(parts_s) > 0 else ""
-        m_s = parts_s[1] if len(parts_s) > 1 else "Hello from Alya!"
-        return {"handled": True, "text": android.send_phone_sms(p_s, m_s)}
+    # /serial <serial_number> [brand]
+    elif cmd in ["/serial", "/sn", "/serialnumber", "/checkserial"]:
+        parts_sn = args_str.split(maxsplit=1)
+        sn_val = parts_sn[0] if len(parts_sn) > 0 else ""
+        brand_val = parts_sn[1] if len(parts_sn) > 1 else None
+        res_sn = imei_dev.decode_serial_number(sn_val, brand_val)
+        if res_sn.get("success"):
+            return {"handled": True, "text": res_sn.get("text", "")}
+        return {"handled": True, "text": res_sn.get("error", "⚠️ Serial number decoding failed.")}
 
-    # 97. /readsms [limit]
-    elif cmd in ["/readsms", "/inboxsms"]:
-        try:
-            lim = int(args_str.strip())
-        except Exception:
-            lim = 5
-        return {"handled": True, "text": android.read_recent_phone_sms(lim)}
+    # /model <apple_part_number>
+    elif cmd in ["/model", "/partno", "/applemodel", "/checkmodel"]:
+        res_mod = imei_dev.decode_apple_model_number(args_str)
+        if res_mod.get("success"):
+            return {"handled": True, "text": res_mod.get("text", "")}
+        return {"handled": True, "text": res_mod.get("error", "⚠️ Model decoding failed.")}
 
-    # 98. /alarm <time> [label]
-    elif cmd in ["/alarm", "/setalarm"]:
-        parts_a = args_str.split(maxsplit=1)
-        t_a = parts_a[0] if len(parts_a) > 0 else "07:00 AM"
-        l_a = parts_a[1] if len(parts_a) > 1 else "Alya Alarm"
-        return {"handled": True, "text": android.set_phone_alarm(t_a, l_a)}
+    # /mac <mac_address>
+    elif cmd in ["/mac", "/oui", "/macaddress", "/maclookup"]:
+        res_mac = imei_dev.lookup_mac_oui(args_str)
+        if res_mac.get("success"):
+            return {"handled": True, "text": res_mac.get("text", "")}
+        return {"handled": True, "text": res_mac.get("error", "⚠️ MAC lookup failed.")}
 
-    # 99. /timer <duration> [label]
-    elif cmd in ["/timer", "/settimer"]:
-        parts_tm = args_str.split(maxsplit=1)
-        d_tm = parts_tm[0] if len(parts_tm) > 0 else "5 minutes"
-        l_tm = parts_tm[1] if len(parts_tm) > 1 else "Timer"
-        return {"handled": True, "text": android.set_phone_timer(d_tm, l_tm)}
+    # /ceir [imei]
+    elif cmd in ["/ceir", "/blockphone", "/lostphone", "/stolenphone"]:
+        res_ceir = imei_dev.generate_ceir_blocking_guide(args_str if args_str else None)
+        return {"handled": True, "text": res_ceir.get("text", "")}
 
-    # 100. /open <target>
-    elif cmd in ["/open", "/launch", "/app"]:
-        return {"handled": True, "text": android.open_file_or_app_on_phone(args_str)}
-
-    # 101. /callscreen <caller_statement>
-    elif cmd in ["/callscreen", "/screen", "/voicemail"]:
-        return {"handled": True, "text": android.screen_incoming_call_message("Unknown Caller", args_str)}
+    # /scanimei [image_url]
+    elif cmd in ["/scanimei", "/imeiscan", "/boxscan", "/scanbox"]:
+        target_img = args_str.strip() if args_str else None
+        if not target_img:
+            # Check last media uploaded by user
+            target_img = get_last_user_media(user_id)
+        if not target_img:
+            return {
+                "handled": True,
+                "text": (
+                    "**Usage:** `/scanimei <image_url_or_photo>`\n\n"
+                    "📸 **How to use:**\n"
+                    "1. Upload a photo/screenshot of your Phone Box, Invoice, or `*#06#` screen.\n"
+                    "2. Send it with caption `/scanimei` (or send `/scanimei` right after uploading)."
+                )
+            }
+        res_scan = imei_dev.scan_imei_and_serial_from_image(target_img)
+        if res_scan.get("success"):
+            return {"handled": True, "text": res_scan.get("text", "")}
+        return {"handled": True, "text": res_scan.get("error", "⚠️ Barcode/IMEI scanning failed.")}
 
     # 102. /upi <vpa> [amount] [name] [note]
     elif cmd in ["/upi", "/payqr", "/upiqr"]:
@@ -852,11 +870,97 @@ def _dispatch_slash_command(
 
         return adv.generate_upi_qr(vpa=vpa_id, amount=amt_val, payee_name=p_name, note=p_note)
 
-    # 103. /search <query>
-    elif cmd in ["/search", "/google", "/websearch"]:
+    # 103. /search <query> (Jobs & Scholarships Search)
+    elif cmd in ["/search", "/findjob", "/jobsearch"]:
         if not args_str:
-            return {"handled": True, "text": "Usage: `/search <query>`\nExample: `/search latest tech news 2026`"}
+            return {"handled": True, "text": "Usage: `/search <query>`\nExample: `/search WBPSC` or `/search NSP Scholarship`"}
+        return {"handled": True, "text": js.search_vacancies_text(db, args_str)}
+
+    # 103b. /websearch <query> or /google (Live Web Search)
+    elif cmd in ["/google", "/websearch"]:
+        if not args_str:
+            return {"handled": True, "text": "Usage: `/websearch <query>`\nExample: `/websearch latest tech news 2026`"}
         return {"handled": True, "text": adv.search_live_web(args_str)}
+
+    # 103c. /jobs
+    elif cmd in ["/jobs", "/wbjobs", "/govtjobs", "/sarkarijobs"]:
+        return {"handled": True, "text": js.get_latest_jobs_text(db, user_id=user_id, limit=5)}
+
+    # /railway
+    elif cmd in ["/railway", "/rrb", "/rrc", "/railwayjobs"]:
+        return {"handled": True, "text": js.get_railway_jobs_text(db, user_id=user_id, limit=5)}
+
+    # /bank
+    elif cmd in ["/bank", "/bankjobs", "/ibps", "/sbi", "/banking"]:
+        return {"handled": True, "text": js.get_banking_jobs_text(db, user_id=user_id, limit=5)}
+
+    # /defence
+    elif cmd in ["/defence", "/police", "/army", "/navy", "/airforce", "/paramilitary"]:
+        return {"handled": True, "text": js.get_defence_jobs_text(db, user_id=user_id, limit=5)}
+
+    # /teaching
+    elif cmd in ["/teaching", "/teacher", "/tet", "/ctet", "/kvs"]:
+        return {"handled": True, "text": js.get_teaching_jobs_text(db, user_id=user_id, limit=5)}
+
+    # /eligible <qualification>
+    elif cmd in ["/eligible", "/eligibility", "/qualification", "/degreejobs"]:
+        return {"handled": True, "text": js.get_jobs_by_qualification_text(db, args_str, user_id=user_id, limit=5)}
+
+    # /admitcard
+    elif cmd in ["/admitcard", "/admit", "/hallticket", "/callletter"]:
+        return {"handled": True, "text": js.get_admit_cards_text(db, user_id=user_id, limit=5)}
+
+    # /results
+    elif cmd in ["/results", "/examresults", "/result", "/sarkariresult"]:
+        return {"handled": True, "text": js.get_exam_results_text(db, user_id=user_id, limit=5)}
+
+    # /answerkey
+    elif cmd in ["/answerkey", "/keys", "/responsesheet"]:
+        return {"handled": True, "text": js.get_answer_keys_text(db, user_id=user_id, limit=5)}
+
+    # 103d. /scholarships
+    elif cmd in ["/scholarships", "/scholarship", "/allscholarships"]:
+        return {"handled": True, "text": js.get_latest_scholarships_text(db, user_id=user_id, limit=5)}
+
+    # /svmcm
+    elif cmd in ["/svmcm", "/bikashbhavan", "/svmcmguide"]:
+        return {"handled": True, "text": js.get_svmcm_guide_text()}
+
+    # /aikyashree
+    elif cmd in ["/aikyashree", "/minority", "/wbmdfc", "/aikyashreeguide"]:
+        return {"handled": True, "text": js.get_aikyashree_guide_text()}
+
+    # /nsp
+    elif cmd in ["/nsp", "/centralscholarship", "/nspguide"]:
+        return {"handled": True, "text": js.get_nsp_guide_text()}
+
+    # /girlschol
+    elif cmd in ["/girlschol", "/kanyashree", "/pragati", "/girlscholarships"]:
+        return {"handled": True, "text": js.get_girls_scholarships_text()}
+
+    # /studyabroad
+    elif cmd in ["/studyabroad", "/chevening", "/daad", "/fulbright", "/abroadscholarship"]:
+        return {"handled": True, "text": js.get_study_abroad_scholarships_text()}
+
+    # /scholeligible
+    elif cmd in ["/scholeligible", "/matchscholarship", "/scholarshipmatcher"]:
+        return {"handled": True, "text": js.check_scholarship_eligibility_text(args_str)}
+
+    # /scholhelp
+    elif cmd in ["/scholhelp", "/npci", "/dbt", "/scholguide"]:
+        return {"handled": True, "text": js.get_scholarship_help_guide_text()}
+
+    # 103e. /psu
+    elif cmd in ["/psu", "/psujobs", "/psucareers"]:
+        return {"handled": True, "text": js.get_latest_psu_text(db, user_id=user_id, limit=5)}
+
+    # 103f. /stop (Unsubscribe from job alerts)
+    elif cmd in ["/stop", "/unsub", "/unsubscribe"]:
+        return {"handled": True, "text": js.unsubscribe_user(db, user_id)}
+
+    # 103g. /status (Admin Scraper Telemetry)
+    elif cmd in ["/status", "/scraperstatus", "/jobstatus"]:
+        return {"handled": True, "text": js.get_status_text(db, user_id)}
 
     # 104. /transcribe [url_or_path]
     elif cmd in ["/transcribe", "/stt", "/voicetotext", "/audio"]:

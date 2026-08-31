@@ -16,6 +16,14 @@ intents:
   - list_habits
   - list_todos
   - list_notes
+  - ask_jobs
+  - ask_scholarships
+  - ask_psu_jobs
+  - search_vacancies
+  - subscribe_alerts
+  - unsubscribe_alerts
+  - set_alert_format
+  - ask_help
   - nlu_fallback
 
 responses:
@@ -50,6 +58,13 @@ actions:
   - action_list_habits
   - action_list_todos
   - action_list_notes
+  - action_get_jobs
+  - action_get_scholarships
+  - action_get_psu_jobs
+  - action_search_vacancies
+  - action_subscribe_alerts
+  - action_unsubscribe_alerts
+  - action_set_alert_format
 
 session_config:
   session_expiration_time: 60
