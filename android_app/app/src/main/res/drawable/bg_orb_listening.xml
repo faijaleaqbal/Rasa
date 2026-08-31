@@ -4,10 +4,10 @@
     <gradient
         android:type="radial"
         android:gradientRadius="80dp"
-        android:startColor="#34D399"
-        android:centerColor="#059669"
-        android:endColor="#047857" />
+        android:startColor="#10B981"
+        android:centerColor="#047857"
+        android:endColor="#064E3B" />
     <stroke
-        android:width="4dp"
+        android:width="3dp"
         android:color="#6EE7B7" />
 </shape>

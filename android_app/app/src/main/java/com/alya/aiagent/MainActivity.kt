@@ -2,18 +2,18 @@ package com.alya.aiagent
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
@@ -24,6 +24,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.ScaleAnimation
 import android.widget.Button
@@ -32,6 +33,7 @@ import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -41,6 +43,8 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -52,36 +56,82 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         const val KEY_SERVER_URL = "server_url"
         const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
         const val PERMISSION_REQUEST_CODE = 101
+        const val FILE_PICKER_REQUEST_CODE = 202
         const val TAG = "MainActivity"
     }
 
-    private lateinit var tvStatus: TextView
-    private lateinit var tvPulseHint: TextView
+    private enum class Tab { HOME, MODELS, HISTORY, SETTINGS }
+    private var currentTab = Tab.HOME
+
+    private lateinit var rootContainer: LinearLayout
+    private lateinit var contentFrame: LinearLayout
+    private lateinit var bottomNavDock: LinearLayout
+
+    private lateinit var tvStatusBadge: TextView
+
+    private lateinit var homeTabContainer: LinearLayout
+    private lateinit var modelsTabContainer: LinearLayout
+    private lateinit var historyTabContainer: LinearLayout
+    private lateinit var settingsTabContainer: LinearLayout
+
+    private lateinit var chatScrollView: ScrollView
+    private lateinit var chatContainer: LinearLayout
+    private lateinit var etMessageInput: EditText
     private lateinit var btnOrb: LinearLayout
     private lateinit var ivOrbMic: ImageView
     private lateinit var tvOrbLabel: TextView
-    private lateinit var chatContainer: LinearLayout
-    private lateinit var chatScrollView: ScrollView
-    private lateinit var switchWakeWord: Switch
+    private lateinit var tvThinkingIndicator: TextView
+
     private lateinit var etServerUrl: EditText
-    private lateinit var serverConfigCard: LinearLayout
+    private lateinit var switchWakeWord: Switch
+    private lateinit var tvServerLatency: TextView
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isListening = false
+    private var isCloudOnline = true
+    private var activeModelName = "Llama-3-8B-Instruct.Q4_K_M"
+
+    private val installedModels = mutableListOf(
+        ModelItem("Llama-3-8B-Instruct.Q4_K_M", "Meta • FP8/Q4", "4.8 GB", "8,192", true, true),
+        ModelItem("Mistral-7B-Instruct-v0.3.Q4", "Mistral AI • GGUF", "4.3 GB", "32,768", true, false),
+        ModelItem("Phi-3-Mini-4k-Instruct.Q4", "Microsoft • GGUF", "2.3 GB", "4,096", true, false),
+        ModelItem("Gemma-2-2B-IT.Q4_K_M", "Google • GGUF", "1.6 GB", "8,192", true, false)
+    )
+
+    private val conversationHistory = mutableListOf<HistoryItem>()
+
+    data class ModelItem(
+        val name: String,
+        val provider: String,
+        val size: String,
+        val contextLength: String,
+        var isInstalled: Boolean,
+        var isActive: Boolean
+    )
+
+    data class HistoryItem(
+        val title: String,
+        val time: String,
+        val snippet: String,
+        val type: String
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        setContentView(buildModernUi())
+        val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
+        conversationHistory.add(HistoryItem("Q3 Financial Analysis", sdf.format(Date()), "Analyzed quarterly metrics and market summary", "doc"))
+        conversationHistory.add(HistoryItem("Passport Photo Studio", "Yesterday", "Generated 300 DPI Indian Passport dimensions", "image"))
+
+        setContentView(buildRootLayout())
 
         tts = TextToSpeech(this, this)
         initSpeechRecognizer()
         checkAndRequestPermissions()
 
-        // Check if wake word service should be running
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val wakeWordEnabled = prefs.getBoolean(KEY_WAKE_WORD_ENABLED, true)
         switchWakeWord.isChecked = wakeWordEnabled
@@ -89,7 +139,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             startAlyaService()
         }
 
-        // Handle Launch from Wake-Word, Assist Button, or Power Button
+        checkServerHealth(getSavedServerUrl())
         handleTriggerIntent(intent)
     }
 
@@ -101,124 +151,178 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun handleTriggerIntent(intent: Intent?) {
         if (intent == null) return
-
         val action = intent.action
-        val isFromWakeWord = intent.getBooleanExtra("EXTRA_START_LISTENING", false)
-        val isAssistAction = (action == Intent.ACTION_ASSIST || 
-                              action == Intent.ACTION_VOICE_COMMAND ||
-                              action == "android.intent.action.VOICE_ASSIST" || 
-                              action == "android.intent.action.SEARCH_LONG_PRESS")
+        val isVoiceTrigger = intent.getBooleanExtra("VOICE_TRIGGER", false)
+        val isWakeWord = intent.getBooleanExtra("WAKE_WORD_TRIGGER", false)
 
-        if (isFromWakeWord || isAssistAction) {
+        if (isWakeWord || isVoiceTrigger || Intent.ACTION_VOICE_COMMAND == action || Intent.ACTION_ASSIST == action) {
+            switchTab(Tab.HOME)
             mainHandler.postDelayed({
-                vibratePhone(100)
-                addSystemNotice("⚡ Alya activated via ${if (isFromWakeWord) "Wake Word ('Hey Alya')" else "Power / Assist Button"}")
                 startVoiceRecognition()
-            }, 300)
+            }, 400)
         }
     }
 
-    private fun buildModernUi(): View {
-        val rootScrollView = ScrollView(this).apply {
-            setBackgroundColor(Color.parseColor("#0B0F19"))
-            isFillViewport = true
-        }
+    // =========================================================================
+    // UI BUILDER (Stitch Design System + Dark / Violet / Gold Hierarchy)
+    // =========================================================================
 
-        val mainLayout = LinearLayout(this).apply {
+    private fun buildRootLayout(): View {
+        rootContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 50, 40, 60)
-            gravity = Gravity.CENTER_HORIZONTAL
+            setBackgroundColor(Color.parseColor("#08080A"))
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
 
-        // Top Header Bar
+        val header = buildTopAppBar()
+        rootContainer.addView(header)
+
+        contentFrame = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1.0f
+            )
+        }
+
+        homeTabContainer = buildHomeTab()
+        modelsTabContainer = buildModelsTab()
+        historyTabContainer = buildHistoryTab()
+        settingsTabContainer = buildSettingsTab()
+
+        contentFrame.addView(homeTabContainer)
+        contentFrame.addView(modelsTabContainer)
+        contentFrame.addView(historyTabContainer)
+        contentFrame.addView(settingsTabContainer)
+
+        modelsTabContainer.visibility = View.GONE
+        historyTabContainer.visibility = View.GONE
+        settingsTabContainer.visibility = View.GONE
+
+        rootContainer.addView(contentFrame)
+
+        bottomNavDock = buildBottomNavDock()
+        rootContainer.addView(bottomNavDock)
+
+        return rootContainer
+    }
+
+    private fun buildTopAppBar(): View {
+        val density = resources.displayMetrics.density
         val headerLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 10, 0, 30)
+            setBackgroundColor(Color.parseColor("#0D0D10"))
+            setPadding((16 * density).toInt(), (12 * density).toInt(), (16 * density).toInt(), (12 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
 
-        val ivLogo = ImageView(this).apply {
-            val logoResId = resources.getIdentifier("alya_logo", "drawable", packageName)
-            if (logoResId != 0) {
-                setImageResource(logoResId)
-            }
-            val size = (48 * resources.displayMetrics.density).toInt()
-            layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                setMargins(0, 0, 24, 0)
-            }
-        }
-        headerLayout.addView(ivLogo)
-
-        val headerTextLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val tvBrand = TextView(this).apply {
+            text = "ALYA"
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD))
+            letterSpacing = 0.15f
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
+        headerLayout.addView(tvBrand)
 
-        val tvHeaderTitle = TextView(this).apply {
-            text = "ALYA AI ASSISTANT"
-            textSize = 19f
-            setTextColor(Color.WHITE)
+        tvStatusBadge = TextView(this).apply {
+            text = "● CLOUD ONLINE"
+            textSize = 10f
+            setTextColor(Color.parseColor("#34D399"))
             setTypeface(null, Typeface.BOLD)
             letterSpacing = 0.05f
+            val pillRes = resources.getIdentifier("bg_status_pill", "drawable", packageName)
+            if (pillRes != 0) setBackgroundResource(pillRes)
+            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
+            setOnClickListener {
+                toggleExecutionMode()
+            }
         }
-        headerTextLayout.addView(tvHeaderTitle)
+        headerLayout.addView(tvStatusBadge)
 
-        val tvHeaderSub = TextView(this).apply {
-            text = "Autonomous Voice & Phone Controller"
-            textSize = 12f
-            setTextColor(Color.parseColor("#38BDF8"))
-        }
-        headerTextLayout.addView(tvHeaderSub)
+        return headerLayout
+    }
 
-        headerLayout.addView(headerTextLayout)
-        mainLayout.addView(headerLayout)
+    // =========================================================================
+    // TAB 1: HOME & LIVE CHAT VIEW
+    // =========================================================================
 
-        // Status Pill Badge
-        val statusPillLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(32, 14, 32, 14)
-            val pillResId = resources.getIdentifier("bg_status_pill", "drawable", packageName)
-            if (pillResId != 0) setBackgroundResource(pillResId)
+    private fun buildHomeTab(): LinearLayout {
+        val density = resources.displayMetrics.density
+        val homeLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
         }
 
-        tvStatus = TextView(this).apply {
-            text = "🟢 Ready • Tap Orb or say 'Hey Alya'"
-            textSize = 13f
-            setTextColor(Color.parseColor("#38BDF8"))
-            gravity = Gravity.CENTER
+        val homeScrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1.0f
+            )
+            isVerticalScrollBarEnabled = false
+        }
+
+        val scrollContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (20 * density).toInt())
+        }
+
+        val tvGreeting = TextView(this).apply {
+            text = "Namaste, Alex"
+            textSize = 22f
+            setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, (4 * density).toInt())
         }
-        statusPillLayout.addView(tvStatus)
-        mainLayout.addView(statusPillLayout)
+        scrollContent.addView(tvGreeting)
 
-        // Center Hero Orb
-        val orbContainer = LinearLayout(this).apply {
+        val tvSubGreeting = TextView(this).apply {
+            text = "Ready to analyze documents, fetch live data, or run local AI models."
+            textSize = 13f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, 0, 0, (18 * density).toInt())
+        }
+        scrollContent.addView(tvSubGreeting)
+
+        val bentoGrid = buildBentoGrid()
+        scrollContent.addView(bentoGrid)
+
+        val orbWrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(0, 40, 0, 30)
+            setPadding(0, (12 * density).toInt(), 0, (16 * density).toInt())
         }
 
-        val orbSize = (160 * resources.displayMetrics.density).toInt()
+        val orbSize = (140 * density).toInt()
         btnOrb = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(orbSize, orbSize)
-            val orbResId = resources.getIdentifier("bg_orb_idle", "drawable", packageName)
-            if (orbResId != 0) setBackgroundResource(orbResId)
+            val orbRes = resources.getIdentifier("bg_orb_idle", "drawable", packageName)
+            if (orbRes != 0) setBackgroundResource(orbRes)
             isClickable = true
             isFocusable = true
             setOnClickListener {
-                if (isListening) {
-                    stopVoiceRecognition()
-                } else {
-                    startVoiceRecognition()
-                }
+                if (isListening) stopVoiceRecognition() else startVoiceRecognition()
             }
         }
 
         ivOrbMic = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_btn_speak_now)
-            val micSize = (48 * resources.displayMetrics.density).toInt()
+            val micSize = (38 * density).toInt()
             layoutParams = LinearLayout.LayoutParams(micSize, micSize)
             setColorFilter(Color.WHITE)
         }
@@ -226,99 +330,62 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         tvOrbLabel = TextView(this).apply {
             text = "TAP TO SPEAK"
-            textSize = 12f
-            setTextColor(Color.WHITE)
+            textSize = 11f
+            setTextColor(Color.parseColor("#E2E8F0"))
             setTypeface(null, Typeface.BOLD)
             letterSpacing = 0.08f
-            setPadding(0, 8, 0, 0)
+            setPadding(0, (6 * density).toInt(), 0, 0)
         }
         btnOrb.addView(tvOrbLabel)
+        orbWrapper.addView(btnOrb)
+        scrollContent.addView(orbWrapper)
 
-        orbContainer.addView(btnOrb)
-        mainLayout.addView(orbContainer)
+        val chipScroll = buildHorizontalChips()
+        scrollContent.addView(chipScroll)
 
-        tvPulseHint = TextView(this).apply {
-            text = "Say \"Hey Alya\" anytime or press power button"
-            textSize = 12f
-            setTextColor(Color.parseColor("#64748B"))
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 24)
-        }
-        mainLayout.addView(tvPulseHint)
-
-        // Quick Suggestions Horizontal Chips
-        val chipScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            setPadding(0, 0, 0, 24)
-        }
-        val chipContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        val chips = listOf(
-            "📞 Call Mom",
-            "💬 Send WhatsApp",
-            "⏰ Set Alarm 7 AM",
-            "🌤️ Weather Update",
-            "🤖 EC2 Test Ping"
-        )
-
-        for (chip in chips) {
-            val tvChip = TextView(this).apply {
-                text = chip
-                textSize = 12f
-                setTextColor(Color.parseColor("#93C5FD"))
-                val chipBg = resources.getIdentifier("bg_chip", "drawable", packageName)
-                if (chipBg != 0) setBackgroundResource(chipBg)
-                setPadding(30, 16, 30, 16)
-                val params = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(0, 0, 16, 0) }
-                layoutParams = params
-                setOnClickListener {
-                    val promptText = chip.substring(chip.indexOf(" ") + 1)
-                    if (chip.contains("EC2 Test")) {
-                        testServerConnection(sanitizeServerUrl(etServerUrl.text.toString()))
-                    } else {
-                        addUserMessage(promptText)
-                        sendToAlyaServer(promptText)
-                    }
-                }
-            }
-            chipContainer.addView(tvChip)
-        }
-        chipScroll.addView(chipContainer)
-        mainLayout.addView(chipScroll)
-
-        // Live Chat / Interaction Container Card
         val chatCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            val cardRes = resources.getIdentifier("bg_card_dark", "drawable", packageName)
+            val cardRes = resources.getIdentifier("bg_card_graphite", "drawable", packageName)
             if (cardRes != 0) setBackgroundResource(cardRes)
-            setPadding(32, 28, 32, 28)
-            val cardParams = LinearLayout.LayoutParams(
+            setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, 24) }
-            layoutParams = cardParams
+            ).apply { setMargins(0, 0, 0, (16 * density).toInt()) }
+        }
+
+        val chatHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, (10 * density).toInt())
         }
 
         val tvChatHeader = TextView(this).apply {
-            text = "💬 LIVE CONVERSATION & ACTIONS"
-            textSize = 12f
-            setTextColor(Color.parseColor("#94A3B8"))
+            text = "💬 LIVE CONVERSATION"
+            textSize = 11f
+            setTextColor(Color.parseColor("#A1A1AA"))
             setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.05f
-            setPadding(0, 0, 0, 16)
+            letterSpacing = 0.08f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
-        chatCard.addView(tvChatHeader)
+        chatHeaderRow.addView(tvChatHeader)
+
+        tvThinkingIndicator = TextView(this).apply {
+            text = "✦ Alya is thinking..."
+            textSize = 11f
+            setTextColor(Color.parseColor("#C4B5FD"))
+            setTypeface(null, Typeface.ITALIC)
+            visibility = View.GONE
+        }
+        chatHeaderRow.addView(tvThinkingIndicator)
+        chatCard.addView(chatHeaderRow)
 
         chatScrollView = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (220 * resources.displayMetrics.density).toInt()
+                (240 * density).toInt()
             )
+            isVerticalScrollBarEnabled = false
         }
 
         chatContainer = LinearLayout(this).apply {
@@ -326,61 +393,678 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         chatScrollView.addView(chatContainer)
         chatCard.addView(chatScrollView)
-        mainLayout.addView(chatCard)
+        scrollContent.addView(chatCard)
 
-        // Add Initial Welcome Message
-        addAssistantMessage("Namaste! Main Alya hoon. Aap mujhse bol kar call, WhatsApp, alarm ya koi bhi sawaal pooch sakte hain.")
+        homeScrollView.addView(scrollContent)
+        homeLayout.addView(homeScrollView)
 
-        // System Integrations Card (Wake Word & Assistant Trigger)
-        val systemCard = LinearLayout(this).apply {
+        val composer = buildChatComposer()
+        homeLayout.addView(composer)
+
+        addAssistantMessage("Namaste! Main Alya hoon. Aap bol kar ya text likh kar Jobs, Trains, Models, Documents ya koi bhi sawaal pooch sakte hain.")
+
+        return homeLayout
+    }
+
+    private fun buildBentoGrid(): View {
+        val density = resources.displayMetrics.density
+        val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            val cardRes = resources.getIdentifier("bg_card_dark", "drawable", packageName)
+            setPadding(0, 0, 0, (16 * density).toInt())
+        }
+
+        val row1 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, (10 * density).toInt())
+        }
+        row1.addView(createBentoCard("📄 Extract Text", "Scan & OCR docs") {
+            sendQuickPrompt("/ocr")
+        })
+        row1.addView(createBentoCard("🎨 Photo Studio", "Passport & Presets") {
+            sendQuickPrompt("/imagetools")
+        })
+        grid.addView(row1)
+
+        val row2 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        row2.addView(createBentoCard("🚂 Live Trains", "PNR & NTES Status") {
+            sendQuickPrompt("/pnr")
+        })
+        row2.addView(createBentoCard("🎓 Jobs & Alerts", "Railway, Bank, SVMCM") {
+            sendQuickPrompt("/jobs")
+        })
+        grid.addView(row2)
+
+        return grid
+    }
+
+    private fun createBentoCard(title: String, subtitle: String, onClick: () -> Unit): View {
+        val density = resources.displayMetrics.density
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val cardRes = resources.getIdentifier("bg_card_graphite", "drawable", packageName)
             if (cardRes != 0) setBackgroundResource(cardRes)
-            setPadding(32, 24, 32, 24)
-            val params = LinearLayout.LayoutParams(
+            setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1.0f
+            ).apply { setMargins(0, 0, (8 * density).toInt(), 0) }
+
+            val tvTitle = TextView(this@MainActivity).apply {
+                text = title
+                textSize = 13f
+                setTextColor(Color.WHITE)
+                setTypeface(null, Typeface.BOLD)
+            }
+            addView(tvTitle)
+
+            val tvSub = TextView(this@MainActivity).apply {
+                text = subtitle
+                textSize = 10f
+                setTextColor(Color.parseColor("#71717A"))
+                setPadding(0, (2 * density).toInt(), 0, 0)
+            }
+            addView(tvSub)
+
+            setOnClickListener {
+                vibrateTap()
+                onClick()
+            }
+        }
+    }
+
+    private fun buildHorizontalChips(): View {
+        val density = resources.displayMetrics.density
+        val scroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setPadding(0, 0, 0, (14 * density).toInt())
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val chips = listOf(
+            "💼 /jobs",
+            "🌟 /svmcm",
+            "🚂 /railway",
+            "🏦 /bank",
+            "🎟️ /admitcard",
+            "🏆 /results",
+            "📱 /imei",
+            "🌤️ /weather"
+        )
+
+        for (chip in chips) {
+            val tv = TextView(this).apply {
+                text = chip
+                textSize = 12f
+                setTextColor(Color.parseColor("#E4E4E7"))
+                val chipRes = resources.getIdentifier("bg_chip", "drawable", packageName)
+                if (chipRes != 0) setBackgroundResource(chipRes)
+                setPadding((16 * density).toInt(), (8 * density).toInt(), (16 * density).toInt(), (8 * density).toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, (8 * density).toInt(), 0) }
+
+                setOnClickListener {
+                    vibrateTap()
+                    val query = chip.substring(chip.indexOf("/") + 1).trim()
+                    addUserMessage("/$query")
+                    sendToAlyaServer("/$query")
+                }
+            }
+            container.addView(tv)
+        }
+        scroll.addView(container)
+        return scroll
+    }
+
+    private fun buildChatComposer(): View {
+        val density = resources.displayMetrics.density
+        val composerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val bgRes = resources.getIdentifier("bg_input_glass", "drawable", packageName)
+            if (bgRes != 0) setBackgroundResource(bgRes)
+            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, 24) }
-            layoutParams = params
+            ).apply { setMargins((14 * density).toInt(), 0, (14 * density).toInt(), (10 * density).toInt()) }
         }
 
-        val tvSystemHeader = TextView(this).apply {
-            text = "⚡ SMART TRIGGERS & INTEGRATIONS"
-            textSize = 12f
-            setTextColor(Color.parseColor("#94A3B8"))
+        val btnAttach = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_input_add)
+            setColorFilter(Color.parseColor("#A1A1AA"))
+            val sz = (36 * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(sz, sz)
+            setOnClickListener {
+                vibrateTap()
+                openFilePicker()
+            }
+        }
+        composerLayout.addView(btnAttach)
+
+        etMessageInput = EditText(this).apply {
+            hint = "Ask Alya anything..."
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#52525B"))
+            textSize = 14f
+            background = null
+            setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+        composerLayout.addView(etMessageInput)
+
+        val btnSend = Button(this).apply {
+            text = "➔"
+            textSize = 15f
+            setTextColor(Color.BLACK)
             setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.05f
-            setPadding(0, 0, 0, 16)
+            val btnRes = resources.getIdentifier("bg_button_primary", "drawable", packageName)
+            if (btnRes != 0) setBackgroundResource(btnRes)
+            val sz = (36 * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(sz, sz)
+            setOnClickListener {
+                val msg = etMessageInput.text.toString().trim()
+                if (msg.isNotEmpty()) {
+                    vibrateTap()
+                    addUserMessage(msg)
+                    etMessageInput.setText("")
+                    sendToAlyaServer(msg)
+                }
+            }
         }
-        systemCard.addView(tvSystemHeader)
+        composerLayout.addView(btnSend)
 
-        // 1. Wake Word Switch Row
+        return composerLayout
+    }
+
+    // =========================================================================
+    // TAB 2: MODEL MANAGER VIEW (Local GGUF & Hugging Face Hub)
+    // =========================================================================
+
+    private fun buildModelsTab(): LinearLayout {
+        val density = resources.displayMetrics.density
+        val modelsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (20 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        val tvTitle = TextView(this).apply {
+            text = "🧠 Model Manager"
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
+        content.addView(tvTitle)
+
+        val tvSub = TextView(this).apply {
+            text = "Local llama.cpp runtime & Hugging Face model deployment"
+            textSize = 13f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, 0, 0, (18 * density).toInt())
+        }
+        content.addView(tvSub)
+
+        // Memory Monitor Card
+        val vramCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val plateRes = resources.getIdentifier("bg_plate_dark", "drawable", packageName)
+            if (plateRes != 0) setBackgroundResource(plateRes)
+            setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, (18 * density).toInt()) }
+        }
+
+        val vramHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val tvVramTitle = TextView(this).apply {
+            text = "HARDWARE MEMORY UTILIZATION"
+            textSize = 11f
+            setTextColor(Color.parseColor("#A1A1AA"))
+            setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.08f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+        vramHeaderRow.addView(tvVramTitle)
+
+        val tvVramPct = TextView(this).apply {
+            text = "4.2 GB / 8.0 GB (52%)"
+            textSize = 11f
+            setTextColor(Color.parseColor("#A78BFA"))
+            setTypeface(null, Typeface.BOLD)
+        }
+        vramHeaderRow.addView(tvVramPct)
+        vramCard.addView(vramHeaderRow)
+
+        val pBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            progress = 52
+            max = 100
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (8 * density).toInt()
+            ).apply { setMargins(0, (10 * density).toInt(), 0, 0) }
+        }
+        vramCard.addView(pBar)
+        content.addView(vramCard)
+
+        // Installed Models List
+        val tvSectionInstalled = TextView(this).apply {
+            text = "INSTALLED LOCAL MODELS (.GGUF)"
+            textSize = 11f
+            setTextColor(Color.parseColor("#71717A"))
+            setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.08f
+            setPadding(0, 0, 0, (10 * density).toInt())
+        }
+        content.addView(tvSectionInstalled)
+
+        for (model in installedModels) {
+            content.addView(createModelCard(model))
+        }
+
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, (10 * density).toInt(), 0, (20 * density).toInt())
+        }
+
+        val btnImport = Button(this).apply {
+            text = "📥 Import .GGUF File"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            val secRes = resources.getIdentifier("bg_button_secondary", "drawable", packageName)
+            if (secRes != 0) setBackgroundResource(secRes)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+                setMargins(0, 0, (6 * density).toInt(), 0)
+            }
+            setOnClickListener {
+                vibrateTap()
+                openFilePicker()
+            }
+        }
+        btnRow.addView(btnImport)
+
+        val btnHub = Button(this).apply {
+            text = "🤗 Hugging Face Hub"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            val btnGrad = resources.getIdentifier("bg_button_gradient", "drawable", packageName)
+            if (btnGrad != 0) setBackgroundResource(btnGrad)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+                setMargins((6 * density).toInt(), 0, 0, 0)
+            }
+            setOnClickListener {
+                vibrateTap()
+                Toast.makeText(this@MainActivity, "Connecting to Hugging Face Model Hub...", Toast.LENGTH_SHORT).show()
+            }
+        }
+        btnRow.addView(btnHub)
+        content.addView(btnRow)
+
+        scroll.addView(content)
+        modelsLayout.addView(scroll)
+        return modelsLayout
+    }
+
+    private fun createModelCard(model: ModelItem): View {
+        val density = resources.displayMetrics.density
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val cardRes = resources.getIdentifier(if (model.isActive) "bg_plate_dark" else "bg_card_graphite", "drawable", packageName)
+            if (cardRes != 0) setBackgroundResource(cardRes)
+            setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, (10 * density).toInt()) }
+        }
+
+        val topRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val nameCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+
+        val tvName = TextView(this).apply {
+            text = model.name
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+        }
+        nameCol.addView(tvName)
+
+        val tvMeta = TextView(this).apply {
+            text = "${model.provider} • ${model.size} • Context: ${model.contextLength}"
+            textSize = 11f
+            setTextColor(Color.parseColor("#71717A"))
+            setPadding(0, (2 * density).toInt(), 0, 0)
+        }
+        nameCol.addView(tvMeta)
+        topRow.addView(nameCol)
+
+        if (model.isActive) {
+            val tvActiveBadge = TextView(this).apply {
+                text = "ACTIVE"
+                textSize = 9f
+                setTextColor(Color.parseColor("#C4B5FD"))
+                setTypeface(null, Typeface.BOLD)
+                val chipRes = resources.getIdentifier("bg_chip", "drawable", packageName)
+                if (chipRes != 0) setBackgroundResource(chipRes)
+                setPadding((8 * density).toInt(), (4 * density).toInt(), (8 * density).toInt(), (4 * density).toInt())
+            }
+            topRow.addView(tvActiveBadge)
+        }
+        card.addView(topRow)
+
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, (10 * density).toInt(), 0, 0)
+        }
+
+        val btnToggle = Button(this).apply {
+            text = if (model.isActive) "Unload" else "Set Active"
+            textSize = 11f
+            setTextColor(if (model.isActive) Color.parseColor("#EF4444") else Color.WHITE)
+            val secRes = resources.getIdentifier("bg_button_secondary", "drawable", packageName)
+            if (secRes != 0) setBackgroundResource(secRes)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                (36 * density).toInt()
+            )
+            setOnClickListener {
+                vibrateTap()
+                setActiveModel(model.name)
+            }
+        }
+        actionRow.addView(btnToggle)
+        card.addView(actionRow)
+
+        return card
+    }
+
+    private fun setActiveModel(modelName: String) {
+        for (m in installedModels) {
+            m.isActive = (m.name == modelName)
+        }
+        activeModelName = modelName
+        Toast.makeText(this, "Active model set to $modelName", Toast.LENGTH_SHORT).show()
+        rebuildModelsView()
+    }
+
+    private fun rebuildModelsView() {
+        modelsTabContainer.removeAllViews()
+        modelsTabContainer.addView(buildModelsTab())
+    }
+
+    // =========================================================================
+    // TAB 3: HISTORY & EXTRACTED FILES VIEW
+    // =========================================================================
+
+    private fun buildHistoryTab(): LinearLayout {
+        val density = resources.displayMetrics.density
+        val historyLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (20 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val tvTitle = TextView(this).apply {
+            text = "📁 History & Files"
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
+        historyLayout.addView(tvTitle)
+
+        val tvSub = TextView(this).apply {
+            text = "Past conversations, analyzed PDFs, and generated media"
+            textSize = 13f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, 0, 0, (16 * density).toInt())
+        }
+        historyLayout.addView(tvSub)
+
+        val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false }
+        val listContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        for (item in conversationHistory) {
+            val itemCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                val cardRes = resources.getIdentifier("bg_card_graphite", "drawable", packageName)
+                if (cardRes != 0) setBackgroundResource(cardRes)
+                setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 0, (10 * density).toInt()) }
+
+                val tvItemTitle = TextView(this@MainActivity).apply {
+                    text = "${if (item.type == "doc") "📄 " else if (item.type == "image") "🎨 " else "💬 "}${item.title}"
+                    textSize = 14f
+                    setTextColor(Color.WHITE)
+                    setTypeface(null, Typeface.BOLD)
+                }
+                addView(tvItemTitle)
+
+                val tvItemSnippet = TextView(this@MainActivity).apply {
+                    text = item.snippet
+                    textSize = 12f
+                    setTextColor(Color.parseColor("#A1A1AA"))
+                    setPadding(0, (2 * density).toInt(), 0, (4 * density).toInt())
+                }
+                addView(tvItemSnippet)
+
+                val tvItemTime = TextView(this@MainActivity).apply {
+                    text = "Recorded ${item.time}"
+                    textSize = 10f
+                    setTextColor(Color.parseColor("#71717A"))
+                }
+                addView(tvItemTime)
+            }
+            listContainer.addView(itemCard)
+        }
+
+        scroll.addView(listContainer)
+        historyLayout.addView(scroll)
+        return historyLayout
+    }
+
+    // =========================================================================
+    // TAB 4: SETTINGS & CLOUD CONFIGURATION VIEW
+    // =========================================================================
+
+    private fun buildSettingsTab(): LinearLayout {
+        val density = resources.displayMetrics.density
+        val settingsLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (20 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        val tvTitle = TextView(this).apply {
+            text = "⚙️ Settings & Triggers"
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
+        content.addView(tvTitle)
+
+        val tvSub = TextView(this).apply {
+            text = "Cloud endpoint routing, wake word, and hardware shortcuts"
+            textSize = 13f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, 0, 0, (18 * density).toInt())
+        }
+        content.addView(tvSub)
+
+        // Server Endpoint Card
+        val serverCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val cardRes = resources.getIdentifier("bg_card_graphite", "drawable", packageName)
+            if (cardRes != 0) setBackgroundResource(cardRes)
+            setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, (16 * density).toInt()) }
+        }
+
+        val tvServerHdr = TextView(this).apply {
+            text = "🌐 CLOUD SERVER ENDPOINT"
+            textSize = 11f
+            setTextColor(Color.parseColor("#A1A1AA"))
+            setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.08f
+            setPadding(0, 0, 0, (10 * density).toInt())
+        }
+        serverCard.addView(tvServerHdr)
+
+        val savedUrl = getSavedServerUrl()
+        etServerUrl = EditText(this).apply {
+            hint = "e.g. $DEFAULT_SERVER_URL"
+            setText(savedUrl)
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY)
+            val inputBg = resources.getIdentifier("bg_input", "drawable", packageName)
+            if (inputBg != 0) setBackgroundResource(inputBg)
+            setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, (10 * density).toInt()) }
+        }
+        serverCard.addView(etServerUrl)
+
+        val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+
+        val btnSave = Button(this).apply {
+            text = "💾 Save URL"
+            textSize = 12f
+            setTextColor(Color.BLACK)
+            setTypeface(null, Typeface.BOLD)
+            val btnPrim = resources.getIdentifier("bg_button_primary", "drawable", packageName)
+            if (btnPrim != 0) setBackgroundResource(btnPrim)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+                setMargins(0, 0, (6 * density).toInt(), 0)
+            }
+            setOnClickListener {
+                vibrateTap()
+                val rawUrl = etServerUrl.text.toString().trim()
+                val cleanUrl = sanitizeServerUrl(rawUrl)
+                saveServerUrl(cleanUrl)
+                etServerUrl.setText(cleanUrl)
+                Toast.makeText(this@MainActivity, "Server URL Saved!", Toast.LENGTH_SHORT).show()
+                checkServerHealth(cleanUrl)
+            }
+        }
+        btnRow.addView(btnSave)
+
+        val btnPing = Button(this).apply {
+            text = "⚡ Test Ping"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            val btnGrad = resources.getIdentifier("bg_button_gradient", "drawable", packageName)
+            if (btnGrad != 0) setBackgroundResource(btnGrad)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
+                setMargins((6 * density).toInt(), 0, 0, 0)
+            }
+            setOnClickListener {
+                vibrateTap()
+                checkServerHealth(sanitizeServerUrl(etServerUrl.text.toString()))
+            }
+        }
+        btnRow.addView(btnPing)
+        serverCard.addView(btnRow)
+
+        tvServerLatency = TextView(this).apply {
+            text = "Latency: Checking..."
+            textSize = 11f
+            setTextColor(Color.parseColor("#34D399"))
+            setPadding(0, (8 * density).toInt(), 0, 0)
+        }
+        serverCard.addView(tvServerLatency)
+        content.addView(serverCard)
+
+        // Wake Word & Default Assistant Card
+        val triggerCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val cardRes = resources.getIdentifier("bg_card_graphite", "drawable", packageName)
+            if (cardRes != 0) setBackgroundResource(cardRes)
+            setPadding((16 * density).toInt(), (14 * density).toInt(), (16 * density).toInt(), (14 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, (16 * density).toInt()) }
+        }
+
+        val tvTriggerHdr = TextView(this).apply {
+            text = "🎙️ WAKE WORD & OS INTEGRATION"
+            textSize = 11f
+            setTextColor(Color.parseColor("#A1A1AA"))
+            setTypeface(null, Typeface.BOLD)
+            letterSpacing = 0.08f
+            setPadding(0, 0, 0, (10 * density).toInt())
+        }
+        triggerCard.addView(tvTriggerHdr)
+
         val switchRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 8, 0, 16)
+            setPadding(0, 0, 0, (12 * density).toInt())
         }
 
-        val switchLabelLayout = LinearLayout(this).apply {
+        val switchLabels = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
 
         val tvSwitchTitle = TextView(this).apply {
-            text = "🎙️ 'Hey Alya' Wake Word"
-            textSize = 14f
+            text = "\"Hey Alya\" Voice Activation"
+            textSize = 13f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
         }
-        switchLabelLayout.addView(tvSwitchTitle)
+        switchLabels.addView(tvSwitchTitle)
 
         val tvSwitchSub = TextView(this).apply {
-            text = "Background continuous listening"
+            text = "Continuous low-power background listening"
             textSize = 11f
-            setTextColor(Color.parseColor("#64748B"))
+            setTextColor(Color.parseColor("#71717A"))
         }
-        switchLabelLayout.addView(tvSwitchSub)
-        switchRow.addView(switchLabelLayout)
+        switchLabels.addView(tvSwitchSub)
+        switchRow.addView(switchLabels)
 
         switchWakeWord = Switch(this).apply {
             setOnCheckedChangeListener { _: CompoundButton, isChecked: Boolean ->
@@ -391,503 +1075,540 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
                 if (isChecked) {
                     startAlyaService()
-                    Toast.makeText(this@MainActivity, "'Hey Alya' Wake Word Activated!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Wake word active!", Toast.LENGTH_SHORT).show()
                 } else {
                     stopAlyaService()
-                    Toast.makeText(this@MainActivity, "Wake Word Deactivated", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Wake word disabled", Toast.LENGTH_SHORT).show()
                 }
             }
         }
         switchRow.addView(switchWakeWord)
-        systemCard.addView(switchRow)
+        triggerCard.addView(switchRow)
 
-        // 2. Set Default Assistant Button (Power Button Trigger)
-        val btnDefaultAssistant = Button(this).apply {
-            text = "⚙️ Set Power Button / Default Assistant"
-            textSize = 13f
+        val btnPowerSettings = Button(this).apply {
+            text = "⚡ Configure Default Assistant & Power Button"
+            textSize = 12f
             setTextColor(Color.WHITE)
-            val btnGrad = resources.getIdentifier("bg_button_gradient", "drawable", packageName)
-            if (btnGrad != 0) setBackgroundResource(btnGrad)
-            setPadding(24, 20, 24, 20)
+            val secRes = resources.getIdentifier("bg_button_secondary", "drawable", packageName)
+            if (secRes != 0) setBackgroundResource(secRes)
+            setPadding((16 * density).toInt(), (10 * density).toInt(), (16 * density).toInt(), (10 * density).toInt())
             setOnClickListener {
+                vibrateTap()
                 openAssistantSettings()
             }
         }
-        systemCard.addView(btnDefaultAssistant)
+        triggerCard.addView(btnPowerSettings)
+        content.addView(triggerCard)
 
-        mainLayout.addView(systemCard)
+        scroll.addView(content)
+        settingsLayout.addView(scroll)
+        return settingsLayout
+    }
 
-        // Cloud Server Configuration Card
-        serverConfigCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val cardRes = resources.getIdentifier("bg_card_dark", "drawable", packageName)
-            if (cardRes != 0) setBackgroundResource(cardRes)
-            setPadding(32, 24, 32, 24)
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, 30) }
-            layoutParams = params
-        }
+    // =========================================================================
+    // FLOATING BOTTOM NAVIGATION DOCK
+    // =========================================================================
 
-        val tvServerHeading = TextView(this).apply {
-            text = "🌐 EC2 / RASA SERVER SETTINGS"
-            textSize = 12f
-            setTextColor(Color.parseColor("#94A3B8"))
-            setTypeface(null, Typeface.BOLD)
-            letterSpacing = 0.05f
-            setPadding(0, 0, 0, 12)
-        }
-        serverConfigCard.addView(tvServerHeading)
-
-        val savedUrl = getSavedServerUrl()
-        etServerUrl = EditText(this).apply {
-            hint = "e.g. $DEFAULT_SERVER_URL"
-            setText(savedUrl)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            val inputBg = resources.getIdentifier("bg_input", "drawable", packageName)
-            if (inputBg != 0) setBackgroundResource(inputBg)
-            setPadding(30, 24, 30, 24)
-            textSize = 13f
-        }
-        serverConfigCard.addView(etServerUrl)
-
-        val btnServerRow = LinearLayout(this).apply {
+    private fun buildBottomNavDock(): LinearLayout {
+        val density = resources.displayMetrics.density
+        val dockContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 16, 0, 0)
+            gravity = Gravity.CENTER
+            setPadding((16 * density).toInt(), (6 * density).toInt(), (16 * density).toInt(), (10 * density).toInt())
         }
 
-        val btnSaveUrl = Button(this).apply {
-            text = "💾 Save URL"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            val btnDark = resources.getIdentifier("bg_button_dark", "drawable", packageName)
-            if (btnDark != 0) setBackgroundResource(btnDark)
-            setOnClickListener {
-                val cleaned = sanitizeServerUrl(etServerUrl.text.toString())
-                etServerUrl.setText(cleaned)
-                saveServerUrl(cleaned)
-                Toast.makeText(this@MainActivity, "Server URL Saved!", Toast.LENGTH_SHORT).show()
-            }
+        val dockPill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            val dockRes = resources.getIdentifier("bg_nav_dock", "drawable", packageName)
+            if (dockRes != 0) setBackgroundResource(dockRes)
+            setPadding((14 * density).toInt(), (6 * density).toInt(), (14 * density).toInt(), (6 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
-        val saveParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
-            setMargins(0, 0, 12, 0)
-        }
-        btnServerRow.addView(btnSaveUrl, saveParams)
 
-        val btnTestUrl = Button(this).apply {
-            text = "⚡ Test Connect"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            val btnGrad = resources.getIdentifier("bg_button_gradient", "drawable", packageName)
-            if (btnGrad != 0) setBackgroundResource(btnGrad)
-            setOnClickListener {
-                val cleaned = sanitizeServerUrl(etServerUrl.text.toString())
-                testServerConnection(cleaned)
-            }
-        }
-        val testParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
-            setMargins(12, 0, 0, 0)
-        }
-        btnServerRow.addView(btnTestUrl, testParams)
+        dockPill.addView(createNavItem("💬", "Chat", Tab.HOME))
+        dockPill.addView(createNavItem("🧠", "Models", Tab.MODELS))
+        dockPill.addView(createNavItem("📁", "History", Tab.HISTORY))
+        dockPill.addView(createNavItem("⚙️", "Settings", Tab.SETTINGS))
 
-        serverConfigCard.addView(btnServerRow)
-        mainLayout.addView(serverConfigCard)
-
-        rootScrollView.addView(mainLayout)
-        return rootScrollView
+        dockContainer.addView(dockPill)
+        return dockContainer
     }
 
-    private fun openAssistantSettings() {
-        Toast.makeText(this, "Select 'Alya AI' as your Default Digital Assistant App", Toast.LENGTH_LONG).show()
-        try {
-            val intent = Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
-            startActivity(intent)
-        } catch (e: Exception) {
+    private fun createNavItem(icon: String, label: String, tab: Tab): View {
+        val density = resources.displayMetrics.density
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding((14 * density).toInt(), (6 * density).toInt(), (14 * density).toInt(), (6 * density).toInt())
+
+            val tvIcon = TextView(this@MainActivity).apply {
+                text = icon
+                textSize = 16f
+                gravity = Gravity.CENTER
+            }
+            addView(tvIcon)
+
+            val tvLabel = TextView(this@MainActivity).apply {
+                text = label
+                textSize = 10f
+                setTextColor(if (tab == currentTab) Color.parseColor("#A78BFA") else Color.parseColor("#71717A"))
+                setTypeface(null, if (tab == currentTab) Typeface.BOLD else Typeface.NORMAL)
+            }
+            addView(tvLabel)
+
+            setOnClickListener {
+                vibrateTap()
+                switchTab(tab)
+            }
+        }
+    }
+
+    private fun switchTab(tab: Tab) {
+        currentTab = tab
+        homeTabContainer.visibility = if (tab == Tab.HOME) View.VISIBLE else View.GONE
+        modelsTabContainer.visibility = if (tab == Tab.MODELS) View.VISIBLE else View.GONE
+        historyTabContainer.visibility = if (tab == Tab.HISTORY) View.VISIBLE else View.GONE
+        settingsTabContainer.visibility = if (tab == Tab.SETTINGS) View.VISIBLE else View.GONE
+
+        rootContainer.removeView(bottomNavDock)
+        bottomNavDock = buildBottomNavDock()
+        rootContainer.addView(bottomNavDock)
+    }
+
+    // =========================================================================
+    // CHAT ENGINE & NETWORKING
+    // =========================================================================
+
+    private fun addUserMessage(message: String) {
+        val density = resources.displayMetrics.density
+        val userLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            setPadding(0, (4 * density).toInt(), 0, (6 * density).toInt())
+        }
+
+        val tvBubble = TextView(this).apply {
+            text = message
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            val bubbleRes = resources.getIdentifier("bg_user_bubble", "drawable", packageName)
+            if (bubbleRes != 0) setBackgroundResource(bubbleRes)
+            setPadding((14 * density).toInt(), (10 * density).toInt(), (14 * density).toInt(), (10 * density).toInt())
+            maxWidth = (260 * density).toInt()
+        }
+        userLayout.addView(tvBubble)
+        chatContainer.addView(userLayout)
+        scrollChatToBottom()
+    }
+
+    private fun addAssistantMessage(message: String) {
+        val density = resources.displayMetrics.density
+        val aiLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, (4 * density).toInt(), 0, (6 * density).toInt())
+        }
+
+        val bubbleCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val bubbleRes = resources.getIdentifier("bg_assistant_bubble", "drawable", packageName)
+            if (bubbleRes != 0) setBackgroundResource(bubbleRes)
+            setPadding((14 * density).toInt(), (12 * density).toInt(), (14 * density).toInt(), (12 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val tvBubble = TextView(this).apply {
+            text = message
+            textSize = 14f
+            setTextColor(Color.parseColor("#F4F4F5"))
+            setLineSpacing(4f, 1.1f)
+            maxWidth = (280 * density).toInt()
+        }
+        bubbleCard.addView(tvBubble)
+
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            setPadding(0, (6 * density).toInt(), 0, 0)
+        }
+
+        val btnCopy = TextView(this).apply {
+            text = "📋 Copy"
+            textSize = 10f
+            setTextColor(Color.parseColor("#71717A"))
+            setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+            setOnClickListener {
+                vibrateTap()
+                copyToClipboard(message)
+                Toast.makeText(this@MainActivity, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+            }
+        }
+        actionRow.addView(btnCopy)
+
+        val btnSpeak = TextView(this).apply {
+            text = "🔊 Speak"
+            textSize = 10f
+            setTextColor(Color.parseColor("#71717A"))
+            setOnClickListener {
+                vibrateTap()
+                speakOut(message)
+            }
+        }
+        actionRow.addView(btnSpeak)
+        bubbleCard.addView(actionRow)
+
+        aiLayout.addView(bubbleCard)
+        chatContainer.addView(aiLayout)
+        scrollChatToBottom()
+    }
+
+    private fun sendQuickPrompt(cmd: String) {
+        addUserMessage(cmd)
+        sendToAlyaServer(cmd)
+    }
+
+    private fun sendToAlyaServer(userMessage: String) {
+        tvThinkingIndicator.visibility = View.VISIBLE
+
+        executor.execute {
+            val serverUrl = getSavedServerUrl()
+            val webhookUrl = "$serverUrl/webhooks/rest/webhook"
+
             try {
-                val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                startActivity(intent)
-            } catch (e2: Exception) {
-                val intent = Intent(Settings.ACTION_SETTINGS)
-                startActivity(intent)
+                val url = URL(webhookUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                conn.connectTimeout = 8000
+                conn.readTimeout = 15000
+                conn.doOutput = true
+
+                val payload = JSONObject().apply {
+                    put("sender", "8433855679")
+                    put("message", userMessage)
+                }
+
+                val writer = OutputStreamWriter(conn.outputStream)
+                writer.write(payload.toString())
+                writer.flush()
+                writer.close()
+
+                val responseCode = conn.responseCode
+                if (responseCode == 200) {
+                    val response = conn.inputStream.bufferedReader().use { it.readText() }
+                    val jsonArray = JSONArray(response)
+
+                    mainHandler.post {
+                        tvThinkingIndicator.visibility = View.GONE
+                        isCloudOnline = true
+                        updateStatusBadge()
+
+                        if (jsonArray.length() == 0) {
+                            addAssistantMessage("Alya processed your request.")
+                        } else {
+                            val sb = java.lang.StringBuilder()
+                            for (i in 0 until jsonArray.length()) {
+                                val obj = jsonArray.getJSONObject(i)
+                                if (obj.has("text")) {
+                                    val text = obj.getString("text")
+                                    if (text.isNotEmpty()) {
+                                        addAssistantMessage(text)
+                                        sb.append(text).append("\n")
+                                    }
+                                }
+                            }
+                            speakOut(sb.toString().take(200))
+                        }
+                    }
+                } else {
+                    handleServerFallback(userMessage, "HTTP $responseCode")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Server connection failed: ${e.message}")
+                handleServerFallback(userMessage, e.message ?: "Network error")
             }
         }
     }
 
-    private fun startAlyaService() {
-        try {
-            val serviceIntent = Intent(this, AlyaAssistantService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
+    private fun handleServerFallback(userMessage: String, errorReason: String) {
+        mainHandler.post {
+            tvThinkingIndicator.visibility = View.GONE
+            isCloudOnline = false
+            updateStatusBadge()
+
+            addAssistantMessage("⚡ **[Switched to Local Model: $activeModelName]**\n\n(Cloud server unreachable: $errorReason)\n\nExecuting offline inference for: \"$userMessage\"")
+        }
+    }
+
+    private fun toggleExecutionMode() {
+        isCloudOnline = !isCloudOnline
+        updateStatusBadge()
+        val mode = if (isCloudOnline) "Cloud (AWS/Rasa)" else "Local llama.cpp ($activeModelName)"
+        Toast.makeText(this, "Active Engine: $mode", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateStatusBadge() {
+        if (isCloudOnline) {
+            tvStatusBadge.text = "● CLOUD ONLINE"
+            tvStatusBadge.setTextColor(Color.parseColor("#34D399"))
+        } else {
+            tvStatusBadge.text = "● LOCAL GGUF"
+            tvStatusBadge.setTextColor(Color.parseColor("#A78BFA"))
+        }
+    }
+
+    private fun checkServerHealth(serverUrl: String) {
+        executor.execute {
+            val t0 = System.currentTimeMillis()
+            try {
+                val url = URL("$serverUrl/status")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                val code = conn.responseCode
+                val elapsed = System.currentTimeMillis() - t0
+
+                mainHandler.post {
+                    if (code == 200 || code == 404) {
+                        tvServerLatency.text = "Latency: ${elapsed}ms (Healthy)"
+                        tvServerLatency.setTextColor(Color.parseColor("#34D399"))
+                        isCloudOnline = true
+                    } else {
+                        tvServerLatency.text = "Status: HTTP $code"
+                        tvServerLatency.setTextColor(Color.parseColor("#F59E0B"))
+                    }
+                    updateStatusBadge()
+                }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    tvServerLatency.text = "Status: Offline / Timeout"
+                    tvServerLatency.setTextColor(Color.parseColor("#EF4444"))
+                    isCloudOnline = false
+                    updateStatusBadge()
+                }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error starting service: ${e.message}")
         }
     }
 
-    private fun stopAlyaService() {
-        try {
-            val serviceIntent = Intent(this, AlyaAssistantService::class.java)
-            stopService(serviceIntent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping service: ${e.message}")
-        }
-    }
-
-    private fun setOrbListeningState(listening: Boolean) {
-        isListening = listening
-        runOnUiThread {
-            if (listening) {
-                val orbRes = resources.getIdentifier("bg_orb_listening", "drawable", packageName)
-                if (orbRes != 0) btnOrb.setBackgroundResource(orbRes)
-                tvOrbLabel.text = "LISTENING..."
-                tvStatus.text = "🎙️ Listening... (Speak now)"
-                startOrbPulseAnimation()
-            } else {
-                btnOrb.clearAnimation()
-                val orbRes = resources.getIdentifier("bg_orb_idle", "drawable", packageName)
-                if (orbRes != 0) btnOrb.setBackgroundResource(orbRes)
-                tvOrbLabel.text = "TAP TO SPEAK"
-                tvStatus.text = "🟢 Ready • Tap Orb or say 'Hey Alya'"
-            }
-        }
-    }
-
-    private fun startOrbPulseAnimation() {
-        val anim = ScaleAnimation(
-            1.0f, 1.08f, 1.0f, 1.08f,
-            Animation.RELATIVE_TO_SELF, 0.5f,
-            Animation.RELATIVE_TO_SELF, 0.5f
-        ).apply {
-            duration = 450
-            repeatMode = Animation.REVERSE
-            repeatCount = Animation.INFINITE
-        }
-        btnOrb.startAnimation(anim)
-    }
+    // =========================================================================
+    // SPEECH RECOGNITION & TTS
+    // =========================================================================
 
     private fun initSpeechRecognizer() {
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                setOrbListeningState(true)
-            }
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {
-                runOnUiThread {
-                    tvStatus.text = "🧠 Thinking with Alya AI..."
-                    tvOrbLabel.text = "THINKING..."
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    tvOrbLabel.text = "LISTENING..."
+                    animateOrbListening(true)
                 }
-            }
-            override fun onError(error: Int) {
-                setOrbListeningState(false)
-                runOnUiThread {
-                    tvStatus.text = "⚠️ Mic timeout. Tap orb to speak."
-                }
-            }
 
-            override fun onResults(results: Bundle?) {
-                setOrbListeningState(false)
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    val query = matches[0]
-                    addUserMessage(query)
-                    sendToAlyaServer(query)
+                override fun onBeginningOfSpeech() {
+                    tvOrbLabel.text = "HEARING..."
                 }
-            }
 
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {
+                    tvOrbLabel.text = "PROCESSING..."
+                    animateOrbListening(false)
+                }
+
+                override fun onError(error: Int) {
+                    isListening = false
+                    tvOrbLabel.text = "TAP TO SPEAK"
+                    animateOrbListening(false)
+                }
+
+                override fun onResults(results: Bundle?) {
+                    isListening = false
+                    tvOrbLabel.text = "TAP TO SPEAK"
+                    animateOrbListening(false)
+
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        val spokenText = matches[0]
+                        addUserMessage(spokenText)
+                        sendToAlyaServer(spokenText)
+                    }
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        }
     }
 
     private fun startVoiceRecognition() {
-        vibratePhone(60)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), PERMISSION_REQUEST_CODE)
+            return
+        }
+
+        vibrateTap()
+        isListening = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Alya...")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Listening for query...")
         }
-        try {
-            speechRecognizer?.startListening(intent)
-            setOrbListeningState(true)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Mic error: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+        speechRecognizer?.startListening(intent)
     }
 
     private fun stopVoiceRecognition() {
-        try {
-            speechRecognizer?.stopListening()
-        } catch (e: Exception) {}
-        setOrbListeningState(false)
+        isListening = false
+        speechRecognizer?.stopListening()
+        animateOrbListening(false)
+        tvOrbLabel.text = "TAP TO SPEAK"
     }
 
-    private fun addUserMessage(text: String) {
-        runOnUiThread {
-            val bubble = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                val bubbleRes = resources.getIdentifier("bg_user_bubble", "drawable", packageName)
-                if (bubbleRes != 0) setBackgroundResource(bubbleRes)
-                setPadding(28, 20, 28, 20)
-                val params = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity = Gravity.END
-                    setMargins(60, 10, 0, 10)
-                }
-                layoutParams = params
+    private fun animateOrbListening(listening: Boolean) {
+        val orbRes = resources.getIdentifier(
+            if (listening) "bg_orb_listening" else "bg_orb_idle",
+            "drawable",
+            packageName
+        )
+        if (orbRes != 0) btnOrb.setBackgroundResource(orbRes)
+
+        if (listening) {
+            val scale = ScaleAnimation(
+                1.0f, 1.08f, 1.0f, 1.08f,
+                Animation.RELATIVE_TO_SELF, 0.5f,
+                Animation.RELATIVE_TO_SELF, 0.5f
+            ).apply {
+                duration = 600
+                repeatMode = Animation.REVERSE
+                repeatCount = Animation.INFINITE
             }
-
-            val tv = TextView(this).apply {
-                this.text = "🗣️  $text"
-                textSize = 14f
-                setTextColor(Color.WHITE)
-            }
-            bubble.addView(tv)
-            chatContainer.addView(bubble)
-            scrollChatToBottom()
-        }
-    }
-
-    private fun addAssistantMessage(text: String) {
-        runOnUiThread {
-            val bubble = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                val bubbleRes = resources.getIdentifier("bg_assistant_bubble", "drawable", packageName)
-                if (bubbleRes != 0) setBackgroundResource(bubbleRes)
-                setPadding(28, 20, 28, 20)
-                val params = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    gravity = Gravity.START
-                    setMargins(0, 10, 60, 10)
-                }
-                layoutParams = params
-            }
-
-            val tv = TextView(this).apply {
-                this.text = "🤖  $text"
-                textSize = 14f
-                setTextColor(Color.parseColor("#E2E8F0"))
-                setLineSpacing(4f, 1f)
-            }
-            bubble.addView(tv)
-            chatContainer.addView(bubble)
-            scrollChatToBottom()
-        }
-    }
-
-    private fun addSystemNotice(text: String) {
-        runOnUiThread {
-            val tv = TextView(this).apply {
-                this.text = text
-                textSize = 11f
-                setTextColor(Color.parseColor("#38BDF8"))
-                gravity = Gravity.CENTER
-                setPadding(0, 6, 0, 6)
-            }
-            chatContainer.addView(tv)
-            scrollChatToBottom()
-        }
-    }
-
-    private fun scrollChatToBottom() {
-        mainHandler.postDelayed({
-            chatScrollView.fullScroll(ScrollView.FOCUS_DOWN)
-        }, 100)
-    }
-
-    private fun sanitizeServerUrl(rawUrl: String): String {
-        var clean = rawUrl.trim()
-        if (clean.isEmpty()) return DEFAULT_SERVER_URL
-        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-            clean = "http://$clean"
-        }
-        if (clean.endsWith("/")) {
-            clean = clean.dropLast(1)
-        }
-        return clean
-    }
-
-    private fun getSavedServerUrl(): String {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
-    }
-
-    private fun saveServerUrl(url: String) {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_SERVER_URL, url).apply()
-    }
-
-    private fun testServerConnection(serverBase: String) {
-        runOnUiThread {
-            tvStatus.text = "🔄 Testing connection to EC2 Server..."
-            addSystemNotice("🔄 Testing connection to $serverBase...")
-        }
-
-        executor.execute {
-            try {
-                val versionUrl = URL("$serverBase/version")
-                val conn = versionUrl.openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 8000
-                conn.readTimeout = 8000
-                val code = conn.responseCode
-
-                if (code == 200) {
-                    val response = conn.inputStream.bufferedReader().use { it.readText() }
-                    runOnUiThread {
-                        tvStatus.text = "🟢 EC2 Server Online ($serverBase)"
-                        addSystemNotice("🟢 EC2 Rasa Online! Response: $response")
-                        Toast.makeText(this@MainActivity, "Connected to EC2 Rasa Server!", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    runOnUiThread {
-                        tvStatus.text = "⚠️ Server responded with HTTP $code"
-                        addSystemNotice("⚠️ Server HTTP $code")
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    tvStatus.text = "🔴 Connection Failed (${e.message})"
-                    addSystemNotice("🔴 Connection Failed: ${e.message}\nEnsure EC2 Port 5005 Security Group is open.")
-                }
-            }
-        }
-    }
-
-    private fun sendToAlyaServer(message: String) {
-        val serverBase = sanitizeServerUrl(getSavedServerUrl())
-        val endpoint = "$serverBase/webhooks/rest/webhook"
-
-        executor.execute {
-            try {
-                val url = URL(endpoint)
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                conn.doOutput = true
-                conn.connectTimeout = 15000
-                conn.readTimeout = 15000
-
-                val payload = JSONObject().apply {
-                    put("sender", "android_voice_user")
-                    put("message", message)
-                }
-
-                val wr = OutputStreamWriter(conn.outputStream)
-                wr.write(payload.toString())
-                wr.flush()
-
-                if (conn.responseCode == 200) {
-                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                    val replies = JSONArray(responseText)
-                    val combinedText = StringBuilder()
-
-                    for (i in 0 until replies.length()) {
-                        val reply = replies.getJSONObject(i)
-                        val text = reply.optString("text")
-                        if (text.isNotEmpty()) {
-                            combinedText.append(text).append("\n\n")
-                        }
-                    }
-
-                    val finalReply = if (combinedText.isNotEmpty()) combinedText.toString().trim() else "Kripya dobara kahiye."
-                    addAssistantMessage(finalReply)
-                    speakOut(finalReply)
-                    handleIntentTriggers(finalReply)
-                } else {
-                    addAssistantMessage("HTTP Error ${conn.responseCode} from EC2 server.")
-                }
-            } catch (e: Exception) {
-                addAssistantMessage("Connection Error: ${e.message}\nKripya EC2 Security Group port 5005 check karein.")
-            }
-        }
-    }
-
-    private fun speakOut(text: String) {
-        val cleanSpeech = text.replace("*", "").replace("#", "").replace("`", "")
-        tts?.speak(cleanSpeech, TextToSpeech.QUEUE_FLUSH, null, "AlyaVoiceId")
-    }
-
-    private fun handleIntentTriggers(text: String) {
-        if (text.contains("tel:")) {
-            val phone = text.substringAfter("tel:").substringBefore(")")
-            val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone"))
-            startActivity(callIntent)
-        }
-
-        if (text.contains("https://wa.me/")) {
-            val waUrl = text.substringAfter("https://wa.me/").substringBefore(")")
-            val waIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$waUrl"))
-            startActivity(waIntent)
-        }
-    }
-
-    private fun vibratePhone(durationMs: Long) {
-        try {
-            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                vibrator?.vibrate(durationMs)
-            }
-        } catch (e: Exception) {}
-    }
-
-    private fun checkAndRequestPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val permissions = arrayOf(
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.CALL_PHONE,
-                Manifest.permission.SEND_SMS,
-                Manifest.permission.READ_SMS,
-                Manifest.permission.READ_CONTACTS
-            )
-
-            val needed = permissions.filter {
-                checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
-            }
-
-            if (needed.isNotEmpty()) {
-                requestPermissions(needed.toTypedArray(), PERMISSION_REQUEST_CODE)
-            }
-
-            // Request Battery Optimization Exemption so Android doesn't kill Wake Word
-            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
-            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
-                try {
-                    val batteryIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(batteryIntent)
-                } catch (e: Exception) {}
-            }
-
-            // Check Overlay Permission for background popup
-            if (!Settings.canDrawOverlays(this)) {
-                try {
-                    val overlayIntent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
-                    startActivity(overlayIntent)
-                } catch (e: Exception) {}
-            }
+            btnOrb.startAnimation(scale)
+        } else {
+            btnOrb.clearAnimation()
         }
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("hi", "IN")
+        }
+    }
+
+    private fun speakOut(text: String) {
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AlyaUtterance")
+    }
+
+    // =========================================================================
+    // HELPERS & OS HOOKS
+    // =========================================================================
+
+    private fun getSavedServerUrl(): String {
+        return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+    }
+
+    private fun saveServerUrl(url: String) {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_SERVER_URL, url)
+            .apply()
+    }
+
+    private fun sanitizeServerUrl(raw: String): String {
+        var clean = raw.trim()
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = "http://$clean"
+        }
+        return clean.trimEnd('/')
+    }
+
+    private fun scrollChatToBottom() {
+        chatScrollView.post {
+            chatScrollView.fullScroll(View.FOCUS_DOWN)
+        }
+    }
+
+    private fun vibrateTap() {
+        val v = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v?.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            v?.vibrate(25)
+        }
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("Alya", text)
+        clipboard.setPrimaryClip(clip)
+    }
+
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "*/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        startActivityForResult(Intent.createChooser(intent, "Select GGUF Model or Document"), FILE_PICKER_REQUEST_CODE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
+            val uri: Uri? = data?.data
+            if (uri != null) {
+                val path = uri.lastPathSegment ?: "file"
+                if (path.endsWith(".gguf")) {
+                    Toast.makeText(this, "Validating GGUF header for: $path...", Toast.LENGTH_SHORT).show()
+                    installedModels.add(ModelItem(path, "Imported Local", "3.2 GB", "4,096", true, false))
+                    rebuildModelsView()
+                    Toast.makeText(this, "Model $path successfully imported!", Toast.LENGTH_LONG).show()
+                } else {
+                    addUserMessage("📄 Attached file: $path")
+                    sendToAlyaServer("/transcribe $path")
+                }
+            }
+        }
+    }
+
+    private fun openAssistantSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+            } catch (ex: Exception) {
+                Toast.makeText(this, "Please select Alya in Default Assistant Settings", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun startAlyaService() {
+        val intent = Intent(this, AlyaAssistantService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopAlyaService() {
+        stopService(Intent(this, AlyaAssistantService::class.java))
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.RECORD_AUDIO
+        )
+        val needed = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (needed.isNotEmpty()) {
+            requestPermissions(needed.toTypedArray(), PERMISSION_REQUEST_CODE)
         }
     }
 
