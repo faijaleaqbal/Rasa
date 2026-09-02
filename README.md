@@ -1,3 +1,13 @@
+---
+title: Alya AI Bot
+emoji: 🤖
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🤖 Alya — Autonomous Hinglish AI Telegram Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

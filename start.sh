@@ -2,13 +2,14 @@
 set -e
 
 echo "============================================="
-echo "   🤖 Starting Alya AI Assistant on Render   "
+echo "   🤖 Starting Alya AI Assistant             "
 echo "============================================="
 
 # Ensure directories exist
 mkdir -p storage/files storage/auth storage/notes /tmp/alya_image_tools_storage
 
-BOT_PORT="${PORT:-5005}"
+# Port configuration (Hugging Face uses 7860, Render uses $PORT, default 7860)
+BOT_PORT="${PORT:-7860}"
 ACTION_PORT=5055
 
 cleanup() {
@@ -39,7 +40,7 @@ for i in $(seq 1 45); do
     sleep 1
 done
 
-# 3. Start Main Rasa Core Bot Server on $PORT
+# 3. Start Main Rasa Core Bot Server
 echo "🚀 Starting Rasa Bot Server on port ${BOT_PORT}..."
 echo "📡 Webhook URL configured: ${TELEGRAM_WEBHOOK_URL:-'(Not set)'}"
 

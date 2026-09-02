@@ -4,8 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     TF_ENABLE_ONEDNN_OPTS=0 \
     TF_CPP_MIN_LOG_LEVEL=2 \
-    PYTHONPATH="/app" \
-    PORT=5005
+    PORT=7860
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -17,20 +16,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Create non-root user (Required for Hugging Face Spaces)
+RUN useradd -m -u 1000 user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH \
+    PYTHONPATH="/home/user/app"
 
-# Copy requirements and install python packages
+WORKDIR /home/user/app
+
+# Install Python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY . .
+# Copy application files with proper ownership
+COPY --chown=user:user . /home/user/app
 
-# Ensure start.sh has execute permissions and required directories exist
-RUN chmod +x start.sh && \
-    mkdir -p storage/files storage/auth storage/notes /tmp/alya_image_tools_storage
+# Setup storage directories and permissions
+RUN mkdir -p storage/files storage/auth storage/notes /tmp/alya_image_tools_storage && \
+    chown -R user:user /home/user/app /tmp/alya_image_tools_storage && \
+    chmod +x start.sh
 
-EXPOSE 5005 5055
+USER user
+
+EXPOSE 7860 5055
 
 CMD ["./start.sh"]
