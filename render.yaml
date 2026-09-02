@@ -1,0 +1,70 @@
+services:
+  - type: web
+    name: alya-bot
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 5005
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        value: Alya_Rasa_Bot
+      - key: TELEGRAM_WEBHOOK_URL
+        sync: false
+      - key: ALLOWED_TELEGRAM_USER_ID
+        sync: false
+      - key: FREE_ONLY
+        value: "true"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TEXT_PRIMARY_MODEL
+        value: google/gemma-4-26b-a4b-it:free
+      - key: TEXT_FALLBACK_MODELS
+        value: "nvidia/nemotron-3-ultra-550b-a55b:free, dots-studio/dots-3-note-preview:free, openrouter/free"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: OPENWEATHERMAP_API_KEY
+        sync: false
+      - key: WEATHER_API_KEY
+        sync: false
+      - key: NEWSAPI_KEY
+        sync: false
+      - key: EXCHANGERATE_API_KEY
+        sync: false
+      - key: OMDB_API_KEY
+        sync: false
+      - key: TMDB_API_KEY
+        sync: false
+      - key: CALENDARIFIC_API_KEY
+        sync: false
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: HIBP_API_KEY
+        sync: false
+      - key: NASA_API_KEY
+        value: DEMO_KEY
+      - key: WOLFRAM_APP_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_REFRESH_TOKEN
+        sync: false
+      - key: GITHUB_PERSONAL_ACCESS_TOKEN
+        sync: false
