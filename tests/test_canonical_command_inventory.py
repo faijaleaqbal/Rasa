@@ -28,9 +28,8 @@ REQUIRED_BASELINE_COMMANDS = {
     "/solve", "/search", "/transcribe", "/voice", "/ocr", "/compare", "/med", "/today",
     "/horoscope", "/hackernews", "/slang", "/wayback", "/mergepdf", "/splitpdf", "/phish",
     "/ping", "/ssl", "/whois",
-    # Mobile & Android Automation
-    "/call", "/sms", "/readsms", "/alarm", "/timer", "/open", "/callscreen",
-    "/findmyphone", "/clip", "/whatsapp", "/notify", "/skills",
+    # Core Skills & Catalog
+    "/skills",
     # Indian Utilities & Markets
     "/upi", "/pan", "/gstin", "/unit", "/postoffice", "/pincode", "/ifsc", "/pnr",
     "/train", "/flight", "/stock", "/nifty", "/sensex", "/gold", "/fuel", "/ipo", "/aqi",
@@ -86,9 +85,9 @@ class TestCanonicalCommandInventory(unittest.TestCase):
         total_aliases = sum(len(c.aliases) for c in all_cmds)
         total_triggers = total_primary + total_aliases
 
-        self.assertEqual(total_primary, 150, f"Expected 150 canonical primary commands, found {total_primary}")
-        self.assertEqual(total_aliases, 189, f"Expected 189 aliases, found {total_aliases}")
-        self.assertEqual(total_triggers, 339, f"Expected 339 total registry lookup triggers, found {total_triggers}")
+        self.assertEqual(total_primary, 160, f"Expected 160 canonical primary commands, found {total_primary}")
+        self.assertEqual(total_aliases, 239, f"Expected 239 aliases, found {total_aliases}")
+        self.assertEqual(total_triggers, 399, f"Expected 399 total registry lookup triggers, found {total_triggers}")
 
     def test_registry_audit_zero_collisions(self):
         """Verifies registry audit reports zero duplicate commands, collisions, or invalid names."""

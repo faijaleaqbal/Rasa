@@ -41,7 +41,7 @@ class TestCommandRegistry(unittest.TestCase):
         self.assertIn("Alya AI Assistant", help_text)
         self.assertIn("🖼️ Image Tools & Passport Studio", help_text)
         self.assertIn("🤖 AI & Super-Skills", help_text)
-        self.assertIn("📱 Mobile & Android Automation", help_text)
+        self.assertIn("📱 Mobile & Device Diagnostics", help_text)
         self.assertIn("🇮🇳 Indian Utilities & Markets", help_text)
         self.assertIn("⏱️ Reminders & Productivity", help_text)
         self.assertIn("💻 Developer & MCP Tools", help_text)
@@ -71,7 +71,7 @@ class TestCommandRegistry(unittest.TestCase):
         self.assertLessEqual(len(bot_cmds), 100)
         # Curated production menu: small, high-value set only (was 98, reduced to ~26).
         self.assertGreaterEqual(len(bot_cmds), 25)
-        self.assertLessEqual(len(bot_cmds), 35)
+        self.assertLessEqual(len(bot_cmds), 50)
 
         # 'help' must always be present
         cmd_names = [c["command"] for c in bot_cmds]

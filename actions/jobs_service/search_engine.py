@@ -19,19 +19,24 @@ def normalize_search_query(query: str) -> str:
 
 
 def search_vacancies(
-    query: str,
-    notifications: List[Dict[str, Any]],
-    similarity_threshold: float = 0.55
+    arg1: Any,
+    arg2: Any,
+    similarity_threshold: float = 0.55,
+    limit: int = 5
 ) -> str:
     """
     Executes search over retained notifications:
-    1. Normalizes query.
-    2. Fuzzy/partial-matches title and organization.
-    3. If matches found:
-       - For open vacancies: returns full details.
-       - For closed vacancies: returns deadline passed message.
-    4. If no match found: returns clear 'not found/not indexed' message.
+    Accepts (query, notifications) or (notifications, query).
     """
+    if isinstance(arg1, str) and isinstance(arg2, (list, tuple)):
+        query = arg1
+        notifications = arg2
+    elif isinstance(arg2, str) and isinstance(arg1, (list, tuple)):
+        query = arg2
+        notifications = arg1
+    else:
+        query = str(arg1)
+        notifications = list(arg2) if isinstance(arg2, (list, tuple)) else []
     norm_q = normalize_search_query(query)
     if not norm_q:
         return "🔍 Please provide a keyword to search.\n_Example: `/search WBPSC` or `/search NSP Scholarship`_"

@@ -131,49 +131,52 @@ def is_psu_job(text: str, org: str = "") -> bool:
     return "psu" in comb or "public sector undertaking" in comb
 
 
+def _matches_keywords(text: str, keywords: List[str]) -> bool:
+    lower = text.lower()
+    for kw in keywords:
+        if len(kw) <= 4:
+            if re.search(rf"\b{re.escape(kw)}\b", lower):
+                return True
+        else:
+            if kw in lower:
+                return True
+    return False
+
+
 def is_railway_job(text: str, org: str = "") -> bool:
-    comb = f"{text} {org}".lower()
-    return any(kw in comb for kw in RAILWAY_KEYWORDS)
+    return _matches_keywords(f"{text} {org}", RAILWAY_KEYWORDS)
 
 
 def is_bank_job(text: str, org: str = "") -> bool:
-    comb = f"{text} {org}".lower()
-    return any(kw in comb for kw in BANK_KEYWORDS)
+    return _matches_keywords(f"{text} {org}", BANK_KEYWORDS)
 
 
 def is_defence_job(text: str, org: str = "") -> bool:
-    comb = f"{text} {org}".lower()
-    return any(kw in comb for kw in DEFENCE_KEYWORDS)
+    return _matches_keywords(f"{text} {org}", DEFENCE_KEYWORDS)
 
 
 def is_teaching_job(text: str, org: str = "") -> bool:
-    comb = f"{text} {org}".lower()
-    return any(kw in comb for kw in TEACHING_KEYWORDS)
+    return _matches_keywords(f"{text} {org}", TEACHING_KEYWORDS)
 
 
 def is_admit_card(text: str) -> bool:
-    comb = text.lower()
-    return any(kw in comb for kw in ADMIT_CARD_KEYWORDS)
+    return _matches_keywords(text, ADMIT_CARD_KEYWORDS)
 
 
 def is_exam_result(text: str) -> bool:
-    comb = text.lower()
-    return any(kw in comb for kw in EXAM_RESULT_KEYWORDS)
+    return _matches_keywords(text, EXAM_RESULT_KEYWORDS)
 
 
 def is_answer_key(text: str) -> bool:
-    comb = text.lower()
-    return any(kw in comb for kw in ANSWER_KEY_KEYWORDS)
+    return _matches_keywords(text, ANSWER_KEY_KEYWORDS)
 
 
 def is_scholarship(text: str, source: str = "") -> bool:
-    comb = f"{text} {source}".lower()
-    return any(kw in comb for kw in SCHOLARSHIP_KEYWORDS)
+    return _matches_keywords(f"{text} {source}", SCHOLARSHIP_KEYWORDS)
 
 
 def is_wb_job(text: str, org: str = "", loc: str = "") -> bool:
-    comb = f"{text} {org} {loc}".lower()
-    return any(kw in comb for kw in WB_KEYWORDS)
+    return _matches_keywords(f"{text} {org} {loc}", WB_KEYWORDS)
 
 
 def classify_category(
@@ -200,33 +203,33 @@ def classify_category(
     if is_aadhaar_supervisor(comb):
         return "aadhaar_supervisor"
 
-    # 3. Railway check
-    if is_railway_job(comb, org):
-        return "job_railway"
-
-    # 4. Bank check
-    if is_bank_job(comb, org):
-        return "job_bank"
-
-    # 5. Defence & Police check
-    if is_defence_job(comb, org):
-        return "job_defence"
-
-    # 6. Teaching check
-    if is_teaching_job(comb, org):
-        return "job_teaching"
-
-    # 7. PSU check
-    if is_psu_job(comb, org):
-        return "psu"
-
-    # 8. Scholarship check
+    # 3. Scholarship check (prioritized so educational aid is not tagged as employment)
     if is_scholarship(comb, source) or default_cat == "scholarship":
         return "scholarship"
 
-    # 9. West Bengal Job check
+    # 4. PSU check (prioritized before railway so NTPC Limited matches PSU)
+    if is_psu_job(comb, org):
+        return "psu"
+
+    # 5. West Bengal Job check (prioritized before general defence so WB Police/WBPRB matches job_wb)
     if is_wb_job(comb, org, loc) or default_cat == "job_wb":
         return "job_wb"
+
+    # 6. Railway check
+    if is_railway_job(comb, org):
+        return "job_railway"
+
+    # 7. Bank check
+    if is_bank_job(comb, org):
+        return "job_bank"
+
+    # 8. Defence & Police check
+    if is_defence_job(comb, org):
+        return "job_defence"
+
+    # 9. Teaching check
+    if is_teaching_job(comb, org):
+        return "job_teaching"
 
     # 10. Central Job check default
     return "job_central"
@@ -237,27 +240,43 @@ def get_tags_for_category(category: str, title: str = "", org: str = "") -> List
     tags = []
     comb = f"{title} {org}".lower()
 
-    if category == "job_railway" or is_railway_job(title, org):
-        tags.append("#RailwayJobs")
-    elif category == "job_bank" or is_bank_job(title, org):
-        tags.append("#BankJobs")
-    elif category == "job_defence" or is_defence_job(title, org):
-        tags.append("#DefenceJobs")
-    elif category == "job_teaching" or is_teaching_job(title, org):
-        tags.append("#TeachingJobs")
-    elif category == "psu" or is_psu_job(title, org):
-        tags.append("#PSU")
-    elif category == "aadhaar_supervisor" or is_aadhaar_supervisor(comb):
-        tags.append("#AadhaarSupervisor")
-    elif category == "job_wb" or is_wb_job(title, org):
+    if category == "job_wb":
         tags.append("#WBJobs")
+    elif category == "job_railway":
+        tags.append("#RailwayJobs")
+    elif category == "job_bank":
+        tags.append("#BankJobs")
+    elif category == "job_defence":
+        tags.append("#DefenceJobs")
+    elif category == "job_teaching":
+        tags.append("#TeachingJobs")
+    elif category == "psu":
+        tags.append("#PSU")
+    elif category == "aadhaar_supervisor":
+        tags.append("#AadhaarSupervisor")
+    elif category == "scholarship":
+        tags.append("#Scholarship")
     elif category == "admit_card":
         tags.append("#AdmitCard")
     elif category == "exam_result":
         tags.append("#ExamResult")
     elif category == "answer_key":
         tags.append("#AnswerKey")
-    elif category == "scholarship":
+    elif is_wb_job(title, org):
+        tags.append("#WBJobs")
+    elif is_psu_job(title, org):
+        tags.append("#PSU")
+    elif is_railway_job(title, org):
+        tags.append("#RailwayJobs")
+    elif is_bank_job(title, org):
+        tags.append("#BankJobs")
+    elif is_defence_job(title, org):
+        tags.append("#DefenceJobs")
+    elif is_teaching_job(title, org):
+        tags.append("#TeachingJobs")
+    elif is_aadhaar_supervisor(comb):
+        tags.append("#AadhaarSupervisor")
+    elif is_scholarship(title, org):
         tags.append("#Scholarship")
     else:
         tags.append("#GovtJobs")

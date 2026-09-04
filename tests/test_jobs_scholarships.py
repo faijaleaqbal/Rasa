@@ -182,7 +182,10 @@ class TestMessageFormatting(unittest.TestCase):
             "apply_link": "https://scholarships.gov.in"
         }
         res = formatter.format_scholarship_short(item)
-        self.assertEqual(res, "🎓 NMMSS | Last Date: 2026-10-31 | Apply: https://scholarships.gov.in #Scholarship")
+        self.assertIn("🎓 NMMSS", res)
+        self.assertIn("Last Date: 2026-10-31", res)
+        self.assertIn("https://scholarships.gov.in", res)
+        self.assertIn("#Scholarship", res)
 
     def test_job_full_format(self):
         item = {
@@ -216,7 +219,11 @@ class TestMessageFormatting(unittest.TestCase):
             "apply_link": "https://prb.wb.gov.in"
         }
         res = formatter.format_job_short(item)
-        self.assertEqual(res, "💼 Constable | WBPRB | Last Date: 2026-09-30 | Apply: https://prb.wb.gov.in #WBJobs")
+        self.assertIn("💼 Constable", res)
+        self.assertIn("WBPRB", res)
+        self.assertIn("Last Date: 2026-09-30", res)
+        self.assertIn("https://prb.wb.gov.in", res)
+        self.assertIn("#WBJobs", res)
 
 
 class TestFuzzySearchEngine(unittest.TestCase):

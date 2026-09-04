@@ -227,6 +227,96 @@ def extract_city_from_weather_query(text: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Fuel Natural-Language City Extractor
+# ---------------------------------------------------------------------------
+
+_FUEL_FILLER_WORDS = {
+    "petrol", "diesel", "fuel", "cng", "tel", "gas",
+    "price", "prices", "rate", "rates", "cost", "costs", "daam", "dam", "bhav", "bhaav",
+    "kya", "hai", "hain", "ho", "kitna", "kitni", "kitne",
+    "batao", "bata", "btao", "bto", "dikhao", "dikha", "sunao", "suna", "batade",
+    "today", "todays", "aaj", "aj", "aajka", "aajke", "aajki", "kal", "abhi", "live", "current",
+    "update", "report", "status", "info", "information",
+    "in", "at", "for", "of", "me", "mein", "mai", "main", "mei", "ka", "ki", "ke", "per", "litre", "liter", "kg", "kilo",
+    "please", "pls", "plz", "bhai", "bro", "dost", "yaar",
+    "what", "whats", "what's", "how", "hows", "how's", "is", "the", "show", "tell", "give", "get", "check", "do",
+}
+
+_SLASH_FUEL_RE = re.compile(r"^/(?:fuel|petrol|diesel|cng)\b\s*", re.IGNORECASE)
+
+
+def extract_city_from_fuel_query(text: str) -> Optional[str]:
+    """
+    Extracts the actual city/location name from a natural-language fuel price query.
+    Handles:
+      - Slash commands: "/fuel Delhi" -> "Delhi"
+      - English: "What is the petrol price in Kolkata?" -> "Kolkata"
+      - Hinglish: "Delhi me petrol kitna hai" -> "Delhi"
+      - "Kolkata fuel rate" -> "Kolkata"
+      - "cng price in Ahmedabad" -> "Ahmedabad"
+    """
+    if not text or not text.strip():
+        return None
+
+    raw = text.strip()
+
+    # 1. Handle slash commands: "/fuel <city>", "/petrol <city>", "/diesel <city>", "/cng <city>"
+    if raw.startswith("/"):
+        city = _SLASH_FUEL_RE.sub("", raw).strip()
+        city = re.sub(r"^(?:in|for|at|of)\s+", "", city, flags=re.IGNORECASE).strip()
+        return city if city else None
+
+    # 2. Pattern: "<City> me/ka/ki/ke petrol/diesel/fuel/cng"
+    pattern_city_before = re.match(
+        r"^(.+?)\s+(?:me|mein|mai|main|mei|ka|ki|ke)\s+(?:petrol|diesel|fuel|cng|gas)\b",
+        raw,
+        re.IGNORECASE,
+    )
+    if pattern_city_before:
+        candidate = pattern_city_before.group(1).strip()
+        candidate_words = set(candidate.lower().split())
+        if not candidate_words.issubset(_FUEL_FILLER_WORDS):
+            clean_parts = [w for w in candidate.split() if w.lower() not in _FUEL_FILLER_WORDS]
+            if clean_parts:
+                return " ".join(clean_parts)
+
+    # 3. Pattern: "petrol/diesel/fuel/cng in/of/at/for <City>"
+    pattern_city_after = re.search(
+        r"(?:petrol|diesel|fuel|cng|price|rate|rates|daam|dam)\s+"
+        r"(?:in|of|for|at|me|mein|mai|main|mei)\s+(.+?)[\?\.\!]*$",
+        raw,
+        re.IGNORECASE,
+    )
+    if pattern_city_after:
+        candidate = pattern_city_after.group(1).strip()
+        clean_parts = [w for w in candidate.split() if w.lower() not in _FUEL_FILLER_WORDS]
+        if clean_parts:
+            return " ".join(clean_parts)
+
+    # 4. Pattern: "<City> petrol/diesel/fuel/cng"
+    pattern_city_name = re.match(
+        r"^(.+?)\s+(?:petrol|diesel|fuel|cng)\b",
+        raw,
+        re.IGNORECASE,
+    )
+    if pattern_city_name:
+        candidate = pattern_city_name.group(1).strip()
+        candidate_words = set(candidate.lower().split())
+        if not candidate_words.issubset(_FUEL_FILLER_WORDS):
+            clean_parts = [w for w in candidate.split() if w.lower() not in _FUEL_FILLER_WORDS]
+            if clean_parts:
+                return " ".join(clean_parts)
+
+    # 5. Strip all filler words
+    words = re.sub(r"[\?\.\!,;:]+", " ", raw).split()
+    remaining = [w for w in words if w.lower() not in _FUEL_FILLER_WORDS]
+    if remaining and len(remaining) <= 3:
+        return " ".join(remaining)
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Comprehensive Tool Calling Dispatcher for Groq LLM
 # ---------------------------------------------------------------------------
 
@@ -1703,6 +1793,21 @@ class ActionLLMResponse(Action):
                 dispatcher.utter_message(text=v_msg)
             return []
 
+        # 0c. Fast path for natural language fuel/petrol/diesel/cng price queries
+        lower_msg = user_message.lower().strip()
+        fuel_triggers = [
+            "petrol", "diesel", "fuel rate", "fuel price", "fuel rates",
+            "cng rate", "cng price", "petrol price", "diesel price",
+            "petrol rate", "diesel rate", "fuel cost", "petrol cost"
+        ]
+        if any(t in lower_msg for t in fuel_triggers):
+            analytical_cues = ["why", "kyun", "kyu", "karan", "reason", "history", "trend", "future", "forecast", "graph", "compare"]
+            if not any(cue in lower_msg for cue in analytical_cues):
+                detected_city = extract_city_from_fuel_query(user_message) or "Delhi"
+                fuel_report = markets.get_fuel_rates(detected_city)
+                dispatcher.utter_message(text=fuel_report)
+                return []
+
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not groq_api_key or groq_api_key.startswith("your_"):
             warning_msg = (
@@ -1903,6 +2008,18 @@ class ActionGetCrypto(Action):
 
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         res = apis.get_crypto_price("bitcoin,ethereum,solana,dogecoin")
+        dispatcher.utter_message(text=res)
+        return []
+
+
+class ActionGetFuel(Action):
+    def name(self) -> Text:
+        return "action_get_fuel"
+
+    def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
+        user_text = tracker.latest_message.get("text", "")
+        city = extract_city_from_fuel_query(user_text) or "Delhi"
+        res = markets.get_fuel_rates(city)
         dispatcher.utter_message(text=res)
         return []
 

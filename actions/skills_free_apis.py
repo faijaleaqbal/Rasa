@@ -550,10 +550,12 @@ def get_upcoming_holidays(country_code: str = "IN", year: Optional[int] = None) 
             url = f"https://calendarific.com/api/v2/holidays?api_key={cal_key}&country={country_code}&year={year}"
             resp = requests.get(url, timeout=8)
             if resp.status_code == 200:
-                hols = resp.json().get("response", {}).get("holidays", [])
-                if hols:
-                    lines = [f"🎉 **{h.get('name')}** — `{h.get('date', {}).get('iso')}` ({h.get('primary_type')})" for h in hols[:6]]
-                    return f"🗓️ **Public Holidays ({country_code.upper()} - {year}):**\n\n" + "\n".join(lines)
+                res_data = resp.json().get("response")
+                hols = res_data.get("holidays", []) if isinstance(res_data, dict) else (res_data if isinstance(res_data, list) else [])
+                if hols and isinstance(hols, list):
+                    lines = [f"🎉 **{h.get('name')}** — `{h.get('date', {}).get('iso') if isinstance(h.get('date'), dict) else h.get('date')}` ({h.get('primary_type', 'Public')})" for h in hols[:6] if isinstance(h, dict)]
+                    if lines:
+                        return f"🗓️ **Public Holidays ({country_code.upper()} - {year}):**\n\n" + "\n".join(lines)
         except Exception as e:
             logger.warning(f"Calendarific error: {e}")
 
@@ -688,7 +690,7 @@ def get_random_quote() -> str:
     """Fetches an inspirational quote from ZenQuotes."""
     try:
         url = "https://zenquotes.io/api/random"
-        resp = requests.get(url, timeout=8)
+        resp = requests.get(url, timeout=3)
         if resp.status_code == 200:
             data = resp.json()[0]
             return f"✨ **Quote of the Moment:**\n\n_\"{data.get('q')}\"_\n\n— **{data.get('a')}**"

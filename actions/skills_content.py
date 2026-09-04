@@ -44,11 +44,17 @@ def summarize_youtube_video(url_or_id: str) -> str:
     transcript_text = ""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        # Support auto-generated or manual transcripts in English and Hindi
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi', 'en-IN'])
-        transcript_text = " ".join([t['text'] for t in transcript_list])
+        # Support auto-generated or manual transcripts across API versions
+        if hasattr(YouTubeTranscriptApi, "get_transcript"):
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'hi', 'en-IN'])
+            transcript_text = " ".join([t['text'] for t in transcript_list])
+        else:
+            api = YouTubeTranscriptApi()
+            fetched = api.fetch(video_id, languages=['en', 'hi', 'en-IN'])
+            snippets = fetched.to_raw_data() if hasattr(fetched, "to_raw_data") else fetched
+            transcript_text = " ".join([s.get('text', '') if isinstance(s, dict) else getattr(s, 'text', '') for s in snippets])
     except Exception as e:
-        logger.warning(f"youtube-transcript-api direct fetch error: {e}")
+        logger.warning(f"youtube-transcript-api direct fetch notice: {e}")
 
     # Fallback to Jina Reader YouTube parser if transcript API failed
     if not transcript_text:

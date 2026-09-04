@@ -435,6 +435,11 @@ def _dispatch_slash_command(
 
     # 36. /code, /sh, /exec, /bash, /terminal <command or task>
     elif cmd in ["/code", "/sh", "/exec", "/bash", "/terminal", "/run"]:
+        if not db.is_admin_user(str(user_id)):
+            return {
+                "handled": True,
+                "text": "⛔ **Access Restricted:** Shell and terminal execution is reserved for Bot Administrators."
+            }
         if not args_str:
             return {
                 "handled": True,
@@ -651,8 +656,8 @@ def _dispatch_slash_command(
     elif cmd in ["/gold", "/silver", "/metals", "/bullion"]:
         return {"handled": True, "text": markets.get_gold_silver_rates()}
 
-    # 72. /fuel [city] or /petrol or /diesel
-    elif cmd in ["/fuel", "/petrol", "/diesel"]:
+    # 72. /fuel [city] or /petrol or /diesel or /cng
+    elif cmd in ["/fuel", "/petrol", "/diesel", "/cng"]:
         return {"handled": True, "text": markets.get_fuel_rates(args_str or "Malda")}
 
     # 73. /pnr <10-digit PNR>
@@ -688,10 +693,20 @@ def _dispatch_slash_command(
 
     # 80. /py <code> or /python or /run
     elif cmd in ["/py", "/python", "/run", "/exec"]:
+        if not db.is_admin_user(str(user_id)):
+            return {
+                "handled": True,
+                "text": "⛔ **Access Restricted:** Python code sandbox execution is reserved for Bot Administrators."
+            }
         return {"handled": True, "text": dev.run_python_code_sandbox(args_str)}
 
     # 81. /sql <query> or /db
     elif cmd in ["/sql", "/db", "/database"]:
+        if not db.is_admin_user(str(user_id)):
+            return {
+                "handled": True,
+                "text": "⛔ **Access Restricted:** Direct database queries are reserved for Bot Administrators."
+            }
         return {"handled": True, "text": dev.query_sqlite_database(args_str, user_id)}
 
     # 82. /kg <action> [args] or /memory
@@ -716,6 +731,11 @@ def _dispatch_slash_command(
 
     # 85. /log [service] or /logs
     elif cmd in ["/log", "/logs", "/syslog"]:
+        if not db.is_admin_user(str(user_id)):
+            return {
+                "handled": True,
+                "text": "⛔ **Access Restricted:** Server logs inspection is reserved for Bot Administrators."
+            }
         return {"handled": True, "text": dev.view_server_logs(args_str or "rasa-bot", 15)}
 
     # 86. /resume <role_or_skills> or /cv
@@ -733,7 +753,7 @@ def _dispatch_slash_command(
         return {"handled": True, "text": res_cl.get("error", "⚠️ Cover letter generation failed.")}
 
     # 88. /convert <format>
-    elif cmd == "/convert":
+    elif cmd in ["/convert", "/fileconvert"]:
         parts_c = args_str.split(maxsplit=1)
         fmt = parts_c[0] if len(parts_c) > 0 else "png"
         src_path = parts_c[1].strip() if len(parts_c) > 1 else ""
@@ -778,7 +798,7 @@ def _dispatch_slash_command(
         return {"handled": True, "text": mob.get_full_skills_directory()}
 
     # /imei <15_digit_imei>
-    elif cmd in ["/imei", "/checkimei", "/imeicheck", "/imeiinfo"]:
+    elif cmd in ["/imei", "/checkimei", "/imeicheck", "/imeiinfo", "/dualimei"]:
         res_imei = imei_dev.analyze_imei(args_str)
         if res_imei.get("success"):
             return {"handled": True, "text": res_imei.get("text", "")}

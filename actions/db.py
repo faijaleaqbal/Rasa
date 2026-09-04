@@ -1191,6 +1191,12 @@ def set_job_alert_format_pref(telegram_id: str, format_pref: str) -> bool:
     return True
 
 
+# Backward and cross-module compatibility aliases
+subscribe_job_alerts = subscribe_job_alert_user
+unsubscribe_job_alerts = unsubscribe_job_alert_user
+set_job_alert_format = set_job_alert_format_pref
+
+
 def get_job_alert_user(telegram_id: str) -> Optional[Dict[str, Any]]:
     """Retrieves user job alert record."""
     clean_id = str(telegram_id).strip()

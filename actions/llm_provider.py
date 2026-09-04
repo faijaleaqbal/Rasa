@@ -38,6 +38,7 @@ STRUCTURED_OUTPUT_TOOLS = {
     "compare_items_ai",
     "explain_medical_interaction",
     "lookup_medicine_info",
+    "get_fuel_rates",
 }
 
 

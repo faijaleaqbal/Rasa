@@ -53,6 +53,7 @@ actions:
   - action_get_weather
   - action_get_news
   - action_get_crypto
+  - action_get_fuel
   - action_server_health
   - action_speed_test
   - action_list_habits

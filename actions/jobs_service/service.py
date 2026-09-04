@@ -544,18 +544,7 @@ def search_vacancies_text(db_module: Any, query: str, user_id: Optional[str] = N
         return "Usage: `/search <keyword>`\nExample: `/search wbpsc` or `/search railway`"
 
     all_recent = db_module.get_recent_notifications(category=None, limit=200, days=30, open_only=False)
-    matches = search_vacancies(all_recent, clean_q, limit=5)
-
-    if not matches:
-        return f"🔍 **Search Results for:** `{clean_q}`\n\nNo notifications found matching your query from the last 20 days. Try broader keywords (e.g. `/search ssc` or `/search police`)."
-
-    fmt = get_user_format(db_module, user_id)
-    lines = [f"🔍 **Search Results for:** `{clean_q}`\n"]
-    for i, m in enumerate(matches, 1):
-        formatted = format_notification(m, format_pref=fmt)
-        lines.append(f"{i}. {formatted}" if fmt != "full" else f"{formatted}\n")
-
-    return "\n".join(lines).strip()
+    return search_vacancies(clean_q, all_recent, limit=5)
 
 
 def set_user_format_pref(db_module: Any, user_id: str, format_pref: str) -> str:
@@ -564,7 +553,10 @@ def set_user_format_pref(db_module: Any, user_id: str, format_pref: str) -> str:
     if pref not in ("full", "short"):
         return "Usage: `/format full` or `/format short`\n(Default format is **short**)."
 
-    success = db_module.set_job_alert_format(str(user_id), pref)
+    if hasattr(db_module, "set_job_alert_format_pref"):
+        success = db_module.set_job_alert_format_pref(str(user_id), pref)
+    else:
+        success = getattr(db_module, "set_job_alert_format")(str(user_id), pref)
     if success:
         return f"✅ **Notification Format Updated!** Your alerts will now be formatted in **{pref.upper()}** view."
     return "⚠️ Failed to update format preference."
@@ -572,7 +564,10 @@ def set_user_format_pref(db_module: Any, user_id: str, format_pref: str) -> str:
 
 def subscribe_user(db_module: Any, user_id: str, chat_id: Optional[str] = None) -> str:
     """Subscribes a user to daily job alerts."""
-    success = db_module.subscribe_job_alerts(str(user_id), str(chat_id or user_id))
+    if hasattr(db_module, "subscribe_job_alert_user"):
+        success = db_module.subscribe_job_alert_user(str(user_id))
+    else:
+        success = getattr(db_module, "subscribe_job_alerts")(str(user_id), str(chat_id or user_id))
     if success:
         return "🔔 **Subscribed to Daily Job & Scholarship Alerts!** You will receive instant notifications when new vacancies are detected."
     return "⚠️ Subscription failed or you are already subscribed."
@@ -580,7 +575,10 @@ def subscribe_user(db_module: Any, user_id: str, chat_id: Optional[str] = None) 
 
 def unsubscribe_user(db_module: Any, user_id: str) -> str:
     """Unsubscribes a user from job alerts."""
-    success = db_module.unsubscribe_job_alerts(str(user_id))
+    if hasattr(db_module, "unsubscribe_job_alert_user"):
+        success = db_module.unsubscribe_job_alert_user(str(user_id))
+    else:
+        success = getattr(db_module, "unsubscribe_job_alerts")(str(user_id))
     if success:
         return "🔕 **Unsubscribed from Job Alerts.** You will no longer receive proactive notifications. You can still use `/jobs` or `/scholarships` anytime."
     return "ℹ️ You are not currently subscribed to job alerts."
@@ -588,6 +586,9 @@ def unsubscribe_user(db_module: Any, user_id: str) -> str:
 
 def get_status_text(db_module: Any, user_id: Optional[str] = None) -> str:
     """Returns telemetry statistics for scrapers and database volume."""
+    if user_id and hasattr(db_module, "is_admin_user") and not db_module.is_admin_user(str(user_id)):
+        return "⛔ **Access Restricted:** This command is reserved for Bot Administrators."
+
     all_notifs = db_module.get_recent_notifications(days=30, open_only=False, limit=500)
     open_notifs = db_module.get_recent_notifications(days=30, open_only=True, limit=500)
 
@@ -599,12 +600,12 @@ def get_status_text(db_module: Any, user_id: Optional[str] = None) -> str:
     cat_str = "\n".join([f"   • `{k}`: {v} items" for k, v in cats.items()])
 
     return (
-        f"📊 **Alya Job & Scholarship Engine Telemetry**\n"
+        f"📊 **Alya Job & Scholarship Engine Telemetry — Scraper Status Dashboard**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"• **Active Retained Items (30 Days):** `{len(all_notifs)}`\n"
         f"• **Currently Open Vacancies:** `{len(open_notifs)}`\n"
         f"• **Category Breakdown:**\n{cat_str or '   • No data yet'}\n\n"
-        f"• **Active Scraper Modules:** FreeJobAlert, SarkariResult, WBPSC, WBMDFC, Buddy4Study, Scholarships.gov, PSU Careers\n"
+        f"• **Source Health & Active Modules:** FreeJobAlert, SarkariResult, WBPSC, WBMDFC, Buddy4Study, Scholarships.gov, PSU Careers\n"
         f"• **Scraper Schedule:** Daily at 08:00 AM & 06:00 PM IST\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )

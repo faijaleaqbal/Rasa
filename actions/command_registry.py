@@ -364,7 +364,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/ifsc <code>",
         description="Bank branch & IFSC finder (Razorpay API)",
         category="🇮🇳 Indian Utilities & Markets",
-        aliases=["bank"],
+        aliases=["bankifsc", "ifsccode"],
         native_menu=False,
         menu_description="🏦 Bank branch & IFSC finder"
     ),
@@ -381,7 +381,7 @@ COMMAND_REGISTRY: List[CommandInfo] = [
         syntax="/train <number_or_name>",
         description="Indian Railways live schedule & NTES route",
         category="🇮🇳 Indian Utilities & Markets",
-        aliases=["railway"],
+        aliases=["trainstatus", "liveirctc"],
         native_menu=False,
         menu_description="🚆 Live train status & NTES route"
     ),

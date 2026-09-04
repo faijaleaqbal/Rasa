@@ -1,9 +1,11 @@
 import os
 import re
+import time
 import logging
 import requests
+from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 IST = timezone(timedelta(hours=5, minutes=30), name="IST")
@@ -60,9 +62,12 @@ def get_stock_quote(symbol: str) -> str:
         if resp.status_code != 200 or not resp.json().get("chart", {}).get("result"):
             # Fallback without .NS (e.g. US stock like AAPL, TSLA)
             url_fallback = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
-            resp = requests.get(url_fallback, headers=YAHOO_HEADERS, timeout=8)
+        res_json = resp.json()
+        chart_res = res_json.get("chart", {}).get("result")
+        if not chart_res or not isinstance(chart_res, list) or len(chart_res) == 0:
+            return f"⚠️ Could not find market quote for `{clean_sym}`. Please verify ticker symbol (e.g. `RELIANCE`, `TCS`, `TATAMOTORS`, `NIFTY`)."
 
-        data = resp.json()["chart"]["result"][0]["meta"]
+        data = chart_res[0].get("meta", {})
         price = data.get("regularMarketPrice", 0.0)
         prev_close = data.get("chartPreviousClose") or price
         curr = data.get("currency", "INR")
@@ -136,41 +141,300 @@ def get_gold_silver_rates() -> str:
 
 
 # ---------------------------------------------------------------------------
-# 3. Fuel (Petrol / Diesel) Rates by City
+# 3. Fuel (Petrol, Diesel & CNG) Rates by City (Live OMCs & Web Scraping)
 # ---------------------------------------------------------------------------
 
-def get_fuel_rates(city: str = "Delhi") -> str:
-    """Fetches estimated daily Petrol & Diesel prices across major Indian cities."""
-    clean_city = city.strip().title() if city.strip() else "Delhi"
+_FUEL_CACHE: Dict[str, Dict[str, Any]] = {}
+_LAST_FUEL_CACHE_TIME: float = 0.0
 
-    # Reference baseline rates table for key Indian hubs
-    rates_table = {
-        "Delhi": {"petrol": 94.72, "diesel": 87.62},
-        "Mumbai": {"petrol": 104.21, "diesel": 92.15},
-        "Kolkata": {"petrol": 103.94, "diesel": 90.76},
-        "Chennai": {"petrol": 100.75, "diesel": 92.34},
-        "Bengaluru": {"petrol": 102.86, "diesel": 88.94},
-        "Bangalore": {"petrol": 102.86, "diesel": 88.94},
-        "Hyderabad": {"petrol": 107.41, "diesel": 95.65},
-        "Ahmedabad": {"petrol": 94.44, "diesel": 90.11},
-        "Pune": {"petrol": 104.08, "diesel": 90.61},
-        "Jaipur": {"petrol": 104.88, "diesel": 90.36},
-        "Lucknow": {"petrol": 94.65, "diesel": 87.76},
-        "Patna": {"petrol": 105.18, "diesel": 92.04},
-        "Malda": {"petrol": 104.30, "diesel": 91.10},
+# Canonical city slug mapping for NDTV & GoodReturns lookups
+_CITY_SLUG_MAP: Dict[str, str] = {
+    "delhi": "new-delhi",
+    "new delhi": "new-delhi",
+    "mumbai": "mumbai-city",
+    "bombay": "mumbai-city",
+    "bengaluru": "bangalore",
+    "bangalore": "bangalore",
+    "calcutta": "kolkata",
+    "kolkata": "kolkata",
+    "madras": "chennai",
+    "chennai": "chennai",
+    "gurugram": "gurgaon",
+    "gurgaon": "gurgaon",
+    "ahmedabad": "ahmedabad",
+    "hyderabad": "hyderabad",
+    "pune": "pune",
+    "jaipur": "jaipur",
+    "lucknow": "lucknow",
+    "patna": "patna",
+    "malda": "malda",
+    "noida": "ghaziabad",  # NDTV nearby metro node for NCR-East
+    "chandigarh": "chandigarh",
+    "surat": "surat",
+    "bhopal": "bhopal",
+    "indore": "indore",
+    "bhubaneswar": "bhubaneswar",
+}
+
+# District / City to State fallback mapping for CNG & state-level tax parity
+_CITY_TO_STATE_MAP: Dict[str, str] = {
+    "malda": "west bengal",
+    "siliguri": "west bengal",
+    "howrah": "west bengal",
+    "kolkata": "west bengal",
+    "pune": "maharashtra",
+    "nagpur": "maharashtra",
+    "nashik": "maharashtra",
+    "mumbai": "maharashtra",
+    "noida": "uttar pradesh",
+    "ghaziabad": "uttar pradesh",
+    "lucknow": "uttar pradesh",
+    "kanpur": "uttar pradesh",
+    "varanasi": "uttar pradesh",
+    "agra": "uttar pradesh",
+    "gurgaon": "haryana",
+    "gurugram": "haryana",
+    "faridabad": "haryana",
+    "ahmedabad": "gujarat",
+    "surat": "gujarat",
+    "vadodara": "gujarat",
+    "jaipur": "rajasthan",
+    "jodhpur": "rajasthan",
+    "patna": "bihar",
+    "gaya": "bihar",
+    "bhopal": "madhya pradesh",
+    "indore": "madhya pradesh",
+    "bhubaneswar": "odisha",
+    "thiruvananthapuram": "kerala",
+    "kochi": "kerala",
+    "chennai": "tamil nadu",
+    "coimbatore": "tamil nadu",
+    "bangalore": "karnataka",
+    "bengaluru": "karnataka",
+    "hyderabad": "telangana",
+    "ranchi": "jharkhand",
+    "guwahati": "assam",
+    "dehradun": "uttarakhand",
+    "shimla": "himachal pradesh",
+}
+
+# Comprehensive updated baseline rates across major Indian hubs
+_BASELINE_FUEL_RATES: Dict[str, Dict[str, Any]] = {
+    "delhi": {"petrol": 102.12, "diesel": 95.20, "cng": 86.98, "display": "Delhi"},
+    "new delhi": {"petrol": 102.12, "diesel": 95.20, "cng": 86.98, "display": "New Delhi"},
+    "mumbai": {"petrol": 111.21, "diesel": 97.83, "cng": 88.00, "display": "Mumbai"},
+    "kolkata": {"petrol": 113.51, "diesel": 99.82, "cng": 93.50, "display": "Kolkata"},
+    "chennai": {"petrol": 107.76, "diesel": 99.55, "cng": 97.00, "display": "Chennai"},
+    "bengaluru": {"petrol": 111.68, "diesel": 99.56, "cng": 97.00, "display": "Bengaluru"},
+    "bangalore": {"petrol": 111.68, "diesel": 99.56, "cng": 97.00, "display": "Bangalore"},
+    "hyderabad": {"petrol": 115.71, "diesel": 102.40, "cng": 98.00, "display": "Hyderabad"},
+    "ahmedabad": {"petrol": 101.83, "diesel": 97.92, "cng": 84.50, "display": "Ahmedabad"},
+    "pune": {"petrol": 112.04, "diesel": 98.68, "cng": 92.00, "display": "Pune"},
+    "jaipur": {"petrol": 112.69, "diesel": 97.46, "cng": 90.00, "display": "Jaipur"},
+    "lucknow": {"petrol": 101.89, "diesel": 95.36, "cng": 89.50, "display": "Lucknow"},
+    "patna": {"petrol": 113.65, "diesel": 99.36, "cng": 93.00, "display": "Patna"},
+    "malda": {"petrol": 113.81, "diesel": 99.67, "cng": 93.50, "display": "Malda"},
+    "noida": {"petrol": 101.89, "diesel": 95.37, "cng": 87.50, "display": "Noida"},
+    "gurgaon": {"petrol": 102.97, "diesel": 95.64, "cng": 87.50, "display": "Gurgaon"},
+    "gurugram": {"petrol": 102.97, "diesel": 95.64, "cng": 87.50, "display": "Gurugram"},
+    "chandigarh": {"petrol": 101.54, "diesel": 94.88, "cng": 89.00, "display": "Chandigarh"},
+    "surat": {"petrol": 101.63, "diesel": 97.75, "cng": 84.50, "display": "Surat"},
+    "bhopal": {"petrol": 114.57, "diesel": 99.50, "cng": 91.00, "display": "Bhopal"},
+    "indore": {"petrol": 115.00, "diesel": 99.85, "cng": 91.00, "display": "Indore"},
+    "bhubaneswar": {"petrol": 108.95, "diesel": 97.10, "cng": 92.00, "display": "Bhubaneswar"},
+    "thiruvananthapuram": {"petrol": 115.49, "diesel": 104.20, "cng": 97.00, "display": "Thiruvananthapuram"},
+    "ranchi": {"petrol": 106.24, "diesel": 98.00, "cng": 90.00, "display": "Ranchi"},
+    "guwahati": {"petrol": 106.76, "diesel": 98.08, "cng": 92.00, "display": "Guwahati"},
+    "dehradun": {"petrol": 100.55, "diesel": 94.50, "cng": 88.00, "display": "Dehradun"},
+    "shimla": {"petrol": 102.61, "diesel": 95.10, "cng": 89.00, "display": "Shimla"},
+    "jammu": {"petrol": 104.13, "diesel": 95.80, "cng": 89.00, "display": "Jammu"},
+    "raipur": {"petrol": 108.74, "diesel": 99.10, "cng": 92.00, "display": "Raipur"},
+    "goa": {"petrol": 103.92, "diesel": 95.50, "cng": 89.00, "display": "Goa"},
+}
+
+
+def _clean_fuel_city_query(raw_city: str) -> str:
+    """Normalizes natural language inputs into clean Indian city/state names."""
+    if not raw_city or not raw_city.strip():
+        return "Delhi"
+    s = raw_city.strip()
+    # Strip leading commands
+    s = re.sub(r"^/(?:fuel|petrol|diesel|cng)\b\s*", "", s, flags=re.IGNORECASE).strip()
+    # Strip prepositions
+    s = re.sub(r"^(?:in|for|at|of|me|mein|ka|ki|ke)\s+", "", s, flags=re.IGNORECASE).strip()
+    # Strip trailing noisy words
+    s = re.sub(r"\s+(?:rate|rates|price|prices|fuel|city|district|today|aaj)$", "", s, flags=re.IGNORECASE).strip()
+    # Strip leading question/price phrasing
+    s = re.sub(r"^(?:rate|rates|price|prices|daam|dam)\s+(?:of|in|for)\s+", "", s, flags=re.IGNORECASE).strip()
+    # Final punctuation cleanup
+    s = re.sub(r"[\?\.\!,;:]+", "", s).strip()
+    return s.title() if s else "Delhi"
+
+
+def _fetch_goodreturns_bulk_rates() -> Dict[str, Dict[str, Any]]:
+    """Fetches daily live Petrol, Diesel, and CNG rates table across Indian cities & states."""
+    global _FUEL_CACHE, _LAST_FUEL_CACHE_TIME
+    now = time.time()
+    # Cache valid for 4 hours
+    if _FUEL_CACHE and (now - _LAST_FUEL_CACHE_TIME < 14400):
+        return _FUEL_CACHE
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    }
+    new_cache: Dict[str, Dict[str, Any]] = {}
+
+    def _parse_url(url: str) -> Dict[str, float]:
+        data: Dict[str, float] = {}
+        try:
+            resp = requests.get(url, headers=headers, timeout=4)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for table in soup.find_all("table")[:2]:
+                    for row in table.find_all("tr"):
+                        cols = [td.get_text(strip=True) for td in row.find_all(["th", "td"])]
+                        if len(cols) >= 2:
+                            name = cols[0].strip().lower()
+                            match = re.search(r"[0-9]+(?:\.[0-9]+)?", cols[1].replace(",", ""))
+                            if match:
+                                try:
+                                    data[name] = float(match.group(0))
+                                except ValueError:
+                                    pass
+        except Exception as err:
+            logger.debug(f"GoodReturns fuel scrape notice ({url}): {err}")
+        return data
+
+    petrol_map = _parse_url("https://www.goodreturns.in/petrol-price.html")
+    diesel_map = _parse_url("https://www.goodreturns.in/diesel-price.html")
+    cng_map = _parse_url("https://www.goodreturns.in/cng-price.html")
+
+    all_keys = set(petrol_map.keys()) | set(diesel_map.keys()) | set(cng_map.keys())
+    for k in all_keys:
+        new_cache[k] = {
+            "petrol": petrol_map.get(k),
+            "diesel": diesel_map.get(k),
+            "cng": cng_map.get(k)
+        }
+
+    if new_cache:
+        _FUEL_CACHE = new_cache
+        _LAST_FUEL_CACHE_TIME = now
+
+    return _FUEL_CACHE
+
+
+def _fetch_ndtv_city_rates(slug: str) -> Tuple[Optional[float], Optional[float]]:
+    """Fetches real-time Petrol & Diesel prices for a specific city/district from NDTV."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
 
-    rates = rates_table.get(clean_city)
-    if not rates:
-        rates = {"petrol": 96.50, "diesel": 89.20}
+    def _extract_from_page(url: str) -> Optional[float]:
+        try:
+            r = requests.get(url, headers=headers, timeout=3)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+                for t in soup.find_all("table"):
+                    for row in t.find_all("tr"):
+                        for cell in row.find_all(["th", "td"]):
+                            m = re.search(r"([0-9]+\.[0-9]{2})\s*₹", cell.get_text())
+                            if m:
+                                return float(m.group(1))
+        except Exception:
+            pass
+        return None
+
+    petrol = _extract_from_page(f"https://www.ndtv.com/fuel-prices/petrol-price-in-{slug}-city")
+    diesel = _extract_from_page(f"https://www.ndtv.com/fuel-prices/diesel-price-in-{slug}-city")
+    return petrol, diesel
+
+
+def get_fuel_rates(city: str = "Delhi") -> str:
+    """
+    Fetches real-time daily Petrol, Diesel, and CNG fuel prices across Indian cities & states.
+    Uses multi-source scraping (NDTV & GoodReturns) with automatic caching and realistic baselines.
+    """
+    clean_city = _clean_fuel_city_query(city)
+    city_key = clean_city.lower()
+    today_str = datetime.now(IST).strftime("%d %B %Y")
+
+    petrol_price: Optional[float] = None
+    diesel_price: Optional[float] = None
+    cng_price: Optional[float] = None
+    is_live = False
+
+    # 1. Check live GoodReturns table cache
+    gr_data = _fetch_goodreturns_bulk_rates()
+    matched_entry = gr_data.get(city_key)
+
+    if matched_entry:
+        petrol_price = matched_entry.get("petrol")
+        diesel_price = matched_entry.get("diesel")
+        cng_price = matched_entry.get("cng")
+        if petrol_price or diesel_price:
+            is_live = True
+
+    # 2. If city not in bulk table, try NDTV city endpoints
+    if not (petrol_price and diesel_price):
+        slug = _CITY_SLUG_MAP.get(city_key, re.sub(r"[^a-z0-9]+", "-", city_key).strip("-"))
+        if slug:
+            p_ndtv, d_ndtv = _fetch_ndtv_city_rates(slug)
+            if p_ndtv:
+                petrol_price = p_ndtv
+                is_live = True
+            if d_ndtv:
+                diesel_price = d_ndtv
+                is_live = True
+
+    # 3. If CNG not found for specific city, check state-level CNG from GoodReturns
+    if not cng_price:
+        state_name = _CITY_TO_STATE_MAP.get(city_key)
+        if state_name and state_name in gr_data:
+            cng_price = gr_data[state_name].get("cng")
+        elif city_key in gr_data and gr_data[city_key].get("cng"):
+            cng_price = gr_data[city_key].get("cng")
+
+    # 4. Fallback to baseline table if offline or specific city prices missing
+    baseline = _BASELINE_FUEL_RATES.get(city_key)
+    if not baseline:
+        # Check alias in baseline
+        for k, b_data in _BASELINE_FUEL_RATES.items():
+            if k in city_key or city_key in k:
+                baseline = b_data
+                break
+
+    if not baseline:
+        # State level baseline
+        st = _CITY_TO_STATE_MAP.get(city_key)
+        if st and st in _BASELINE_FUEL_RATES:
+            baseline = _BASELINE_FUEL_RATES[st]
+
+    if not petrol_price and baseline:
+        petrol_price = baseline.get("petrol")
+    if not diesel_price and baseline:
+        diesel_price = baseline.get("diesel")
+    if not cng_price and baseline:
+        cng_price = baseline.get("cng")
+
+    # Ultimate fallback safety check
+    petrol_display = f"₹{petrol_price:.2f} / Litre" if petrol_price else "₹102.12 / Litre"
+    diesel_display = f"₹{diesel_price:.2f} / Litre" if diesel_price else "₹95.20 / Litre"
+    if cng_price:
+        cng_display = f"₹{cng_price:.2f} / Kg"
+    else:
+        cng_display = "₹85.00 – ₹93.00 / Kg (Varies by station)"
+
+    status_tag = "🟢 Live OMCs" if is_live else "📊 Reference Daily"
 
     return (
-        f"⛽ **Daily Fuel Rates — `{clean_city}`**:\n\n"
-        f"• 🔴 **Petrol**: `₹{rates['petrol']:.2f} / Litre`\n"
-        f"• 🔵 **Diesel**: `₹{rates['diesel']:.2f} / Litre`\n"
-        f"• 🟢 **CNG (Avg)**: `₹75.50 - ₹82.00 / Kg`\n\n"
-        f"• **Date**: `{datetime.now(IST).strftime('%d %B %Y')}`\n"
-        f"_Prices are revised daily at 6:00 AM IST by OMCs._"
+        f"⛽ **Daily Fuel Rates — `{clean_city}`**\n\n"
+        f"• 🔴 **Petrol**: `{petrol_display}`\n"
+        f"• 🔵 **Diesel**: `{diesel_display}`\n"
+        f"• 🟢 **CNG**: `{cng_display}`\n\n"
+        f"• 📅 **Date**: `{today_str}`\n"
+        f"• ℹ️ **Status**: {status_tag} (Revised daily at 6:00 AM IST by OMCs)"
     )
 
 

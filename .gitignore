@@ -27,3 +27,10 @@ android_app/local.properties
 .DS_Store
 *.log
 results/
+
+# Android build cache and large test models
+android_app/app/.cxx/
+android_app/**/.cxx/
+android_app/test_models/
+pocketpal-ai/
+*.gguf
